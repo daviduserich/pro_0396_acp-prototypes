@@ -569,23 +569,96 @@ async function buildSystemPrompt(moduleName, topics) {
   const ctx = await loadClientContext(state.clientId);
   state.clientContext = ctx;
   
-  let prompt = `Du bist ein professioneller, warmherziger Interview-Agent. Du fuehrst ein strukturiertes Interview im Modul: ${moduleName}.\n\n`;
+  let prompt = `Du bist ein professioneller, warmherziger Interview-Agent namens Eusebius. Du fuehrst ein strukturiertes Interview im Modul: ${moduleName}.\n\n`;
+  
+  // ─── D2V-Prinzipien (Document-to-Voice Pipeline) ───
+  prompt += `INTERVIEW-METHODIK:\n`;
+  prompt += `- Stelle NIEMALS Suggestivfragen. Nutze stattdessen Erfahrungs-Trigger, Kontrast-Fragen und Analogie-Bruecken.\n`;
+  prompt += `- Dein Ziel: Der Interviewpartner soll in EIGENEN Worten sprechen, nicht deine Formulierungen wiederholen.\n`;
+  prompt += `- Frage nach konkreten Erlebnissen, Anekdoten und persoenlichen Einschaetzungen.\n`;
+  prompt += `- Wenn eine Antwort oberflaechlich ist, hake nach: "Kannst du mir ein konkretes Beispiel nennen?"\n\n`;
   
   if (ctx) {
-    prompt += `WICHTIG — Kontext zum Interviewpartner:\n`;
-    prompt += `- Firma: ${ctx.name}\n`;
-    if (ctx.industry) prompt += `- Branche: ${ctx.industry}\n`;
-    if (ctx.region) prompt += `- Region: ${ctx.region}\n`;
-    if (ctx.research?.branche) prompt += `- Spezialgebiet: ${ctx.research.branche}\n`;
-    if (ctx.research?.firmengroesse) prompt += `- Firmengroesse: ${ctx.research.firmengroesse} Mitarbeiter\n`;
-    if (ctx.research?.website) prompt += `- Website: ${ctx.research.website}\n`;
-    const bv = typeof ctx.brand_voice === 'string' ? JSON.parse(ctx.brand_voice) : ctx.brand_voice;
-    if (bv?.personality_adjectives) prompt += `- Markencharakter: ${bv.personality_adjectives.join(', ')}\n`;
-    prompt += `\nNutze diesen Kontext um gezielte, relevante Fragen zu stellen. Beziehe dich auf die Branche und die Firma.\n\n`;
+    const r = ctx.research || {};
+    const wa = r.website_analysis || {};
+    const ba = r.branchenanalyse || {};
+    const ce = r.content_empfehlungen || {};
+    const sma = r.social_media_analysis || {};
+    const bv = typeof ctx.brand_voice === 'string' ? JSON.parse(ctx.brand_voice) : (ctx.brand_voice || {});
+    
+    // ─── Firmenprofil ───
+    prompt += `═══ FIRMENPROFIL ═══\n`;
+    prompt += `Firma: ${ctx.name}\n`;
+    if (ctx.industry) prompt += `Branche: ${ctx.industry}\n`;
+    if (r.branche) prompt += `Spezialgebiet: ${r.branche}\n`;
+    if (ctx.region) prompt += `Region: ${ctx.region}\n`;
+    if (r.firmengroesse) prompt += `Groesse: ${r.firmengroesse}\n`;
+    if (r.website) prompt += `Website: ${r.website}\n`;
+    if (wa.zusammenfassung) prompt += `Beschreibung: ${wa.zusammenfassung}\n`;
+    if (wa.marktpositionierung) prompt += `Positionierung: ${wa.marktpositionierung}\n`;
+    prompt += `\n`;
+    
+    // ─── USP & Dienstleistungen ───
+    if (wa.usp_keywords?.length) {
+      prompt += `USP-Keywords: ${wa.usp_keywords.join(' | ')}\n`;
+    }
+    if (wa.dienstleistungen?.length) {
+      prompt += `Dienstleistungen: ${wa.dienstleistungen.join('; ')}\n`;
+    }
+    prompt += `\n`;
+    
+    // ─── Fachvokabular (damit der Agent wie ein Branchenkenner klingt) ───
+    const vocab = r.branchenspezifisches_vokabular || wa.fachbegriffe || [];
+    if (vocab.length) {
+      prompt += `═══ FACHVOKABULAR (nutze diese Begriffe gezielt) ═══\n`;
+      prompt += vocab.join(', ') + `\n\n`;
+    }
+    
+    // ─── Branchentrends ───
+    if (ba.branchentrends?.length) {
+      prompt += `═══ AKTUELLE BRANCHENTRENDS ═══\n`;
+      prompt += ba.branchentrends.join(', ') + `\n`;
+      prompt += `Nutze diese Trends um gezielte Fragen zu stellen, z.B.: "Wie positioniert sich ${ctx.name} beim Thema [Trend]?"\n\n`;
+    }
+    
+    // ─── Wettbewerber (fuer kontextuelle Fragen) ───
+    if (ba.referenz_firmen?.length) {
+      prompt += `═══ REFERENZFIRMEN (Wettbewerbsumfeld) ═══\n`;
+      ba.referenz_firmen.slice(0, 3).forEach(rf => {
+        prompt += `- ${rf.name}: ${rf.posting_style?.substring(0, 80) || ''}\n`;
+      });
+      prompt += `\n`;
+    }
+    
+    // ─── Content-Empfehlungen ───
+    if (ce.top_themen?.length) {
+      prompt += `═══ TOP-THEMEN FUER CONTENT ═══\n`;
+      ce.top_themen.forEach(t => prompt += `- ${t}\n`);
+      prompt += `\n`;
+    }
+    
+    // ─── Markencharakter ───
+    if (bv.personality_adjectives?.length) {
+      prompt += `Markencharakter: ${bv.personality_adjectives.join(', ')}\n`;
+    }
+    if (bv.formality_level) {
+      prompt += `Formalitaet: ${bv.formality_level}/5\n`;
+    }
+    if (ce.posting_stil) {
+      prompt += `Empfohlener Ton: ${ce.posting_stil}\n`;
+    }
+    prompt += `\n`;
+    
+    // ─── Anweisungen fuer kontextuelle Gespraechsfuehrung ───
+    prompt += `═══ GESPRAECHSFUEHRUNG ═══\n`;
+    prompt += `Du KENNST diese Firma bereits. Stelle Fragen die zeigen, dass du die Branche (${ctx.industry}) verstehst.\n`;
+    prompt += `Beziehe dich auf konkrete Dienstleistungen, Branchentrends und Fachbegriffe.\n`;
+    prompt += `Beispiel: Statt "Was macht Ihre Firma?" frage "Ryser Ingenieure ist ja stark im Siedlungswasserbau – was war euer spannendstes Projekt in letzter Zeit?"\n`;
   }
   
+  prompt += `\n═══ INTERVIEW-THEMEN ═══\n`;
   prompt += `Die Themen fuer dieses Interview sind: ${topics}\n`;
-  prompt += `Fuehre das Interview strukturiert durch, frage gezielt nach und fasse am Ende zusammen.\n`;
+  prompt += `Fuehre das Interview strukturiert durch diese Themen. Frage gezielt nach und fasse am Ende zusammen.\n`;
   prompt += `Spreche ${ctx?.tone === 'du' ? 'den Interviewpartner mit Du an' : 'den Interviewpartner mit Sie an'}.\n`;
   prompt += `Spreche Deutsch.`;
   
