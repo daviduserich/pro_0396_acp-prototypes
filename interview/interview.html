@@ -72,12 +72,12 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
 
 .msg { max-width:80%; padding:10px 14px; border-radius:var(--radius); font-size:14px; line-height:1.5; animation:fadeIn 0.3s ease; }
-.msg.assistant { align-self:flex-start; background:var(--bg-card); border:1px solid var(--border); }
-.msg.user { align-self:flex-end; background:var(--accent); color:#fff; }
+.msg.assistant { align-self:flex-start; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-left:3px solid var(--accent); }
+.msg.user { align-self:flex-end; background:var(--bg-input); border:1px solid var(--border); }
 .msg.system { align-self:center; background:transparent; color:var(--text-muted); font-size:12px; font-style:italic; }
 .msg .role-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
 .msg.assistant .role-label { color:var(--accent-light); }
-.msg.user .role-label { color:rgba(255,255,255,0.7); }
+.msg.user .role-label { color:var(--text-dim); }
 
 @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 
@@ -516,13 +516,14 @@ async function startInterview() {
       const tokenData = await fetchToken('xai');
       state.sessionId = tokenData.session_id;
       state.adapter = new XaiRealtimeAdapter(adapterOpts);
-      // Build system prompt from selected module context
+      // Build rich system prompt with client context from Supabase
       const moduleOpt = document.getElementById('moduleSelect').selectedOptions[0];
       const topics = state.topics.map(t => t.label).join(', ');
-      const systemPrompt = `Du bist ein professioneller Interview-Agent für das Modul: ${moduleOpt?.textContent || 'Interview'}. Die Themen sind: ${topics}. Führe das Interview strukturiert durch, frage nach und fasse am Ende zusammen. Spreche Deutsch.`;
+      const systemPrompt = await buildSystemPrompt(moduleOpt?.textContent || 'Interview', topics);
       // xAI token response uses 'xai_token' field
       await state.adapter.connect(tokenData.xai_token, systemPrompt);
       addMessage('system', `✅ Verbunden (xAI Grok – ${tokenData.model || 'grok-3-mini'})`);
+      addMessage('system', `📋 Kontext geladen: ${state.clientContext?.name || 'Kein Client'} (${state.clientContext?.industry || '?'}, ${state.clientContext?.region || '?'})`);
     } catch (e) {
       console.error('Token/Connect error:', e);
       addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
@@ -534,6 +535,62 @@ async function startInterview() {
     showDemoGreeting();
   }
   state.isConnected = true;
+}
+
+// ─── Load Client Context from Supabase ───
+async function loadClientContext(clientId) {
+  try {
+    const SUPABASE_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4Mzg1OTEsImV4cCI6MjA4NjQxNDU5MX0.U-lKsXf4bkK3oUhQ4vrDy6TelKKO3GlJYH4DaHJu3zo';
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&select=name,voice_config`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.length === 0) return null;
+    const client = data[0];
+    const vc = client.voice_config || {};
+    return {
+      name: client.name,
+      industry: vc.industry || '',
+      region: vc.region || '',
+      tone: vc.tone || 'Sie',
+      brand_voice: vc.brand_voice || {},
+      research: vc.research_context || {}
+    };
+  } catch(e) {
+    console.error('Client-Kontext laden:', e);
+    return null;
+  }
+}
+
+async function buildSystemPrompt(moduleName, topics) {
+  // Load client context
+  const ctx = await loadClientContext(state.clientId);
+  state.clientContext = ctx;
+  
+  let prompt = `Du bist ein professioneller, warmherziger Interview-Agent. Du fuehrst ein strukturiertes Interview im Modul: ${moduleName}.\n\n`;
+  
+  if (ctx) {
+    prompt += `WICHTIG — Kontext zum Interviewpartner:\n`;
+    prompt += `- Firma: ${ctx.name}\n`;
+    if (ctx.industry) prompt += `- Branche: ${ctx.industry}\n`;
+    if (ctx.region) prompt += `- Region: ${ctx.region}\n`;
+    if (ctx.research?.branche) prompt += `- Spezialgebiet: ${ctx.research.branche}\n`;
+    if (ctx.research?.firmengroesse) prompt += `- Firmengroesse: ${ctx.research.firmengroesse} Mitarbeiter\n`;
+    if (ctx.research?.website) prompt += `- Website: ${ctx.research.website}\n`;
+    const bv = typeof ctx.brand_voice === 'string' ? JSON.parse(ctx.brand_voice) : ctx.brand_voice;
+    if (bv?.personality_adjectives) prompt += `- Markencharakter: ${bv.personality_adjectives.join(', ')}\n`;
+    prompt += `\nNutze diesen Kontext um gezielte, relevante Fragen zu stellen. Beziehe dich auf die Branche und die Firma.\n\n`;
+  }
+  
+  prompt += `Die Themen fuer dieses Interview sind: ${topics}\n`;
+  prompt += `Fuehre das Interview strukturiert durch, frage gezielt nach und fasse am Ende zusammen.\n`;
+  prompt += `Spreche ${ctx?.tone === 'du' ? 'den Interviewpartner mit Du an' : 'den Interviewpartner mit Sie an'}.\n`;
+  prompt += `Spreche Deutsch.`;
+  
+  console.log('[System Prompt]', prompt);
+  return prompt;
 }
 
 // Fetch token from n8n endpoint
