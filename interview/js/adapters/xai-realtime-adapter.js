@@ -143,6 +143,23 @@ class XaiRealtimeAdapter {
     return this._connected;
   }
 
+  /**
+   * Update the voice agent's instructions dynamically.
+   * Used by the Opus orchestrator to steer the conversation.
+   * @param {string} newInstructions - New system instructions for the agent
+   */
+  updateInstructions(newInstructions) {
+    if (!this._connected || !this.ws) {
+      console.warn('[xAI] Cannot update instructions — not connected');
+      return;
+    }
+    this._sendEvent({
+      type: 'session.update',
+      session: { instructions: newInstructions }
+    });
+    console.log('[xAI] Instructions updated by orchestrator');
+  }
+
   // ─── Event Handling ───
 
   _handleEvent(event) {

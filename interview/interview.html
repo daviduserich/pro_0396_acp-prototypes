@@ -207,6 +207,10 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       <div class="sidebar-title">📂 Frühere Sessions</div>
       <div id="sessionsList" style="max-height:200px; overflow-y:auto;"><p style="color:var(--text-muted); font-size:12px;">Keine früheren Sessions.</p></div>
     </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">🧠 Brain Status</div>
+      <div id="brainSummary" style="font-size:12px; color:var(--text-muted); line-height:1.5;">Orchestrator bereit — wird aktiv sobald das Gespräch läuft.</div>
+    </div>
   </div>
 
   <!-- Chat Area RIGHT -->
@@ -259,6 +263,7 @@ let state = {
   topics: [],
   currentTopicIndex: 0,
   adapter: null,
+  _turnIndex: 0,
 };
 
 // ─── Supabase Helper ───
@@ -385,6 +390,72 @@ function showTyping(show) {
 function handleAdapterMessage(role, content, data) {
   showTyping(false);
   addMessage(role, content);
+  
+  // ─── Orchestrator Hook: Send to brain after each turn ───
+  if (state.sessionId && (role === 'user' || role === 'assistant')) {
+    sendToOrchestrator(role, content);
+  }
+}
+
+// ─── Orchestrator: Send transcript to Claude Brain ───
+const ORCHESTRATOR_URL = 'https://n8n-mxs.com/webhook/interview-orchestrate';
+
+async function sendToOrchestrator(role, content) {
+  state._turnIndex = (state._turnIndex || 0) + 1;
+  
+  try {
+    const res = await fetch(ORCHESTRATOR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: state.sessionId,
+        client_id: document.getElementById('clientSelect')?.value || '',
+        module_slug: document.getElementById('moduleSelect')?.value || '',
+        turn: { role, content, turn_index: state._turnIndex },
+        current_topic: state.topics[state.currentTopicIndex]?.id || '',
+        topics: state.topics.map(t => t.id || t.label)
+      })
+    });
+    
+    if (!res.ok) { console.warn('[Orchestrator] HTTP', res.status); return; }
+    const data = await res.json();
+    
+    // Inject new instructions into xAI agent
+    if (data.instructions && state.adapter?.updateInstructions) {
+      state.adapter.updateInstructions(data.instructions);
+      console.log('[Orchestrator] 🧠 Brain updated instructions');
+    }
+    
+    // Update topic progress in sidebar
+    if (data.progress_percent != null) {
+      const progressEl = document.getElementById('topicProgress');
+      if (progressEl) {
+        const bar = progressEl.querySelector('.progress-bar') || document.createElement('div');
+        if (!bar.classList.contains('progress-bar')) {
+          bar.className = 'progress-bar';
+          bar.style.cssText = 'height:4px; background:var(--bg-input); border-radius:2px; margin-top:8px; overflow:hidden;';
+          bar.innerHTML = '<div class="progress-fill" style="height:100%; background:var(--green); transition:width 0.5s ease; width:0%;"></div>';
+          progressEl.appendChild(bar);
+        }
+        bar.querySelector('.progress-fill').style.width = data.progress_percent + '%';
+      }
+    }
+    
+    // Topic switch
+    if (data.switch_to_topic) {
+      const idx = state.topics.findIndex(t => t.id === data.switch_to_topic);
+      if (idx >= 0) { state.currentTopicIndex = idx; renderTopics(); }
+    }
+    
+    // Show brain summary in sidebar
+    if (data.summary) {
+      const summaryEl = document.getElementById('brainSummary');
+      if (summaryEl) summaryEl.textContent = data.summary;
+    }
+  } catch (e) {
+    console.warn('[Orchestrator] Non-blocking error:', e.message);
+    // Conversation continues even if orchestrator fails
+  }
 }
 
 function handleAdapterStatus(status) {
@@ -400,7 +471,6 @@ function handleAdapterStatus(status) {
 }
 
 function handleAudioLevel(level) {
-  // Drive the canvas visualizer with real audio data
   state._audioLevel = level;
 }
 
