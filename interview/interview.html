@@ -508,10 +508,18 @@ function toggleMic() {
 
 async function pauseSession() {
   addMessage('system', 'Session wird pausiert...');
+  // Disconnect voice agent
+  if (state.adapter) {
+    await state.adapter.disconnect();
+    state.adapter = null;
+  }
   state.isConnected = false;
+  state.isRecording = false;
   clearInterval(state.durationTimer);
+  stopAudioViz();
   document.getElementById('sessionStatus').innerHTML = '<span class="status-dot paused"></span> Pausiert';
   document.getElementById('micBtn').disabled = true;
+  document.getElementById('micBtn').classList.remove('active');
   document.getElementById('pauseBtn').disabled = true;
   document.getElementById('startBtn').disabled = false;
   document.getElementById('startBtn').textContent = '▶ Fortsetzen';
