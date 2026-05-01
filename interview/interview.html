@@ -542,7 +542,7 @@ async function loadClientContext(clientId) {
   try {
     const SUPABASE_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4Mzg1OTEsImV4cCI6MjA4NjQxNDU5MX0.U-lKsXf4bkK3oUhQ4vrDy6TelKKO3GlJYH4DaHJu3zo';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&select=name,voice_config`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&select=name,voice_config,series_config`, {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
     });
     if (!res.ok) return null;
@@ -550,13 +550,16 @@ async function loadClientContext(clientId) {
     if (data.length === 0) return null;
     const client = data[0];
     const vc = client.voice_config || {};
+    const sc = client.series_config || {};
     return {
       name: client.name,
       industry: vc.industry || '',
       region: vc.region || '',
       tone: vc.tone || 'Sie',
       brand_voice: vc.brand_voice || {},
-      research: vc.research_context || {}
+      research: vc.research_context || {},
+      series: sc.series || [],
+      seriesGlobal: sc.global || {}
     };
   } catch(e) {
     console.error('Client-Kontext laden:', e);
@@ -649,11 +652,35 @@ async function buildSystemPrompt(moduleName, topics) {
     }
     prompt += `\n`;
     
+    // ─── Content-Serien & Strategie ───
+    if (ctx.series?.length) {
+      prompt += `═══ CONTENT-SERIEN (Schwerpunkte fuer Social Media) ═══\n`;
+      ctx.series.filter(s => s.active).forEach(s => {
+        prompt += `${s.icon || ''} ${s.label?.de || s.id}: ${s.description?.de || ''}\n`;
+        if (s.leitfrage?.de) prompt += `  Leitfrage: "${s.leitfrage.de}"\n`;
+        if (s.prompt?.serie_context) prompt += `  Kontext: ${s.prompt.serie_context}\n`;
+      });
+      prompt += `\n`;
+    }
+    
+    // ─── Forbidden Words & Brand Hashtags ───
+    const globals = ctx.seriesGlobal || {};
+    if (globals.tonality?.forbidden_words?.length) {
+      prompt += `VERBOTENE WOERTER (NIEMALS verwenden): ${globals.tonality.forbidden_words.join(', ')}\n`;
+    }
+    if (globals.tonality?.brand_hashtags?.de?.length) {
+      prompt += `Brand-Hashtags: ${globals.tonality.brand_hashtags.de.join(' ')}\n`;
+    }
+    if (globals.language_config?.dialect) {
+      prompt += `Dialekt: ${globals.language_config.dialect}\n`;
+    }
+    prompt += `\n`;
+    
     // ─── Anweisungen fuer kontextuelle Gespraechsfuehrung ───
     prompt += `═══ GESPRAECHSFUEHRUNG ═══\n`;
     prompt += `Du KENNST diese Firma bereits. Stelle Fragen die zeigen, dass du die Branche (${ctx.industry}) verstehst.\n`;
     prompt += `Beziehe dich auf konkrete Dienstleistungen, Branchentrends und Fachbegriffe.\n`;
-    prompt += `Beispiel: Statt "Was macht Ihre Firma?" frage "Ryser Ingenieure ist ja stark im Siedlungswasserbau – was war euer spannendstes Projekt in letzter Zeit?"\n`;
+    prompt += `Beispiel: Statt "Was macht Ihre Firma?" frage "${ctx.name} ist ja stark im ${r.branche?.split(' - ')[0] || ctx.industry} – was war euer spannendstes Projekt in letzter Zeit?"\n`;
   }
   
   prompt += `\n═══ INTERVIEW-THEMEN ═══\n`;
