@@ -141,6 +141,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); min-hei
   .msg { max-width:90%; }
 }
 </style>
+<!-- LiveKit SDK -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
 </head>
 <body>
 
@@ -366,20 +368,69 @@ function showTyping(show) {
   document.getElementById('typingIndicator').classList.toggle('visible', show);
 }
 
+// ─── Adapter Callbacks ───
+function handleAdapterMessage(role, content, data) {
+  showTyping(false);
+  addMessage(role, content);
+}
+
+function handleAdapterStatus(status) {
+  console.log('[Adapter] Status:', status);
+  if (status === 'connected') {
+    state.isConnected = true;
+    document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Aktiv';
+  } else if (status === 'disconnected') {
+    state.isConnected = false;
+  } else if (status === 'error') {
+    addMessage('system', '❌ Verbindungsfehler — bitte erneut versuchen.');
+  }
+}
+
+function handleAudioLevel(level) {
+  // Drive the canvas visualizer with real audio data
+  state._audioLevel = level;
+}
+
 // ─── Session Controls ───
 async function startInterview() {
-  addMessage('system', `Interview wird gestartet... (${state.engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok'})`);
+  const engineLabel = state.engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok';
+  addMessage('system', `Interview wird gestartet... (${engineLabel})`);
   document.getElementById('startBtn').disabled = true;
   document.getElementById('micBtn').disabled = false;
   document.getElementById('pauseBtn').disabled = false;
   document.getElementById('endBtn').disabled = false;
-  state.isConnected = true;
   state.startTime = Date.now();
   state.durationTimer = setInterval(updateDuration, 1000);
-  document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Aktiv';
+  document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Verbinde...';
   renderTopics();
 
-  // Simulate agent greeting (will be replaced by real adapter)
+  // Create adapter based on engine selection
+  const adapterOpts = {
+    onMessage: handleAdapterMessage,
+    onStatusChange: handleAdapterStatus,
+    onAudioLevel: handleAudioLevel,
+    onTopicChange: (topicId, idx) => { state.currentTopicIndex = idx; renderTopics(); },
+  };
+
+  if (state.engine === 'livekit' && window.LiveKitAdapter) {
+    state.adapter = new LiveKitAdapter(adapterOpts);
+    // TODO: Fetch token from n8n endpoint
+    addMessage('system', '⚠️ LiveKit Token-Endpoint noch nicht konfiguriert. Demo-Modus aktiv.');
+    showDemoGreeting();
+  } else if (state.engine === 'xai' && window.XaiRealtimeAdapter) {
+    state.adapter = new XaiRealtimeAdapter(adapterOpts);
+    // TODO: Fetch ephemeral token from n8n endpoint
+    addMessage('system', '⚠️ xAI Token-Endpoint noch nicht konfiguriert. Demo-Modus aktiv.');
+    showDemoGreeting();
+  } else {
+    // Fallback: Demo mode without real adapter
+    addMessage('system', 'Adapter nicht geladen — Demo-Modus aktiv.');
+    showDemoGreeting();
+  }
+  state.isConnected = true;
+}
+
+function showDemoGreeting() {
   showTyping(true);
   setTimeout(() => {
     showTyping(false);
@@ -392,6 +443,11 @@ function toggleMic() {
   const btn = document.getElementById('micBtn');
   btn.classList.toggle('active', state.isRecording);
   btn.title = state.isRecording ? 'Mikrofon aktiv — Klick zum Stummschalten' : 'Mikrofon';
+
+  // Use real adapter if available
+  if (state.adapter && state.adapter.setMicEnabled) {
+    state.adapter.setMicEnabled(state.isRecording);
+  }
   if (state.isRecording) startAudioViz();
   else stopAudioViz();
 }
@@ -411,12 +467,17 @@ async function pauseSession() {
 async function endSession() {
   if (!confirm('Interview wirklich beenden?')) return;
   addMessage('system', 'Interview beendet. Ergebnisse werden gespeichert...');
+  if (state.adapter) await state.adapter.disconnect();
+  state.adapter = null;
   state.isConnected = false;
+  state.isRecording = false;
   clearInterval(state.durationTimer);
   document.getElementById('sessionStatus').innerHTML = '<span class="status-dot completed"></span> Abgeschlossen';
   document.getElementById('micBtn').disabled = true;
+  document.getElementById('micBtn').classList.remove('active');
   document.getElementById('pauseBtn').disabled = true;
   document.getElementById('endBtn').disabled = true;
+  stopAudioViz();
   renderTopics();
 }
 
@@ -474,5 +535,8 @@ function toggleSessions() {
 // ─── Boot ───
 document.addEventListener('DOMContentLoaded', init);
 </script>
+<!-- Adapters -->
+<script src="js/adapters/livekit-adapter.js"></script>
+<script src="js/adapters/xai-realtime-adapter.js"></script>
 </body>
 </html>
