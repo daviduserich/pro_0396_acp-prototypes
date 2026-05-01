@@ -265,10 +265,10 @@ async function init() {
 async function loadClients() {
   const sel = document.getElementById('clientSelect');
   try {
-    const clients = await sbFetch('clients', '?select=id,firma,slug&active=eq.true&order=firma');
+    const clients = await sbFetch('clients', '?select=id,name,slug&active=eq.true&order=name');
     sel.innerHTML = '<option value="">— Kunde wählen —</option>';
     clients.forEach(c => {
-      sel.innerHTML += `<option value="${c.id}" data-slug="${c.slug}">${c.firma || c.slug}</option>`;
+      sel.innerHTML += `<option value="${c.id}" data-slug="${c.slug}">${c.name || c.slug}</option>`;
     });
     sel.onchange = () => { state.clientId = sel.value; checkReady(); };
   } catch(e) { sel.innerHTML = '<option>Fehler beim Laden</option>'; }
@@ -300,9 +300,9 @@ async function loadSessions() {
     const sessions = await sbFetch('interview_sessions',
       '?select=id,status,created_at,engine_type,progress_percent,client_id,interview_modules(label)&order=created_at.desc&limit=10');
     if (!sessions.length) return;
-    const clients = await sbFetch('clients', '?select=id,firma,slug');
+    const clients = await sbFetch('clients', '?select=id,name,slug');
     const clientMap = {};
-    clients.forEach(c => clientMap[c.id] = c.firma || c.slug);
+    clients.forEach(c => clientMap[c.id] = c.name || c.slug);
 
     container.innerHTML = sessions.map(s => {
       const statusIcon = s.status === 'paused' ? '⏸' : s.status === 'completed' ? '✅' : '●';
