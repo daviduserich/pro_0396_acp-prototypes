@@ -31,7 +31,7 @@ class LiveKitAdapter {
     this.onStatusChange = opts.onStatusChange || (() => {});
     this.onAudioLevel = opts.onAudioLevel || (() => {});
     this.onTopicChange = opts.onTopicChange || (() => {});
-    this.serverUrl = opts.serverUrl || 'wss://acp-voice-dev-nnxa9pjm.livekit.cloud';
+    this.serverUrl = opts.serverUrl || 'wss://pro-0396-acp-authentic-content-vje62ms2.livekit.cloud';
     
     this.room = null;
     this.audioContext = null;

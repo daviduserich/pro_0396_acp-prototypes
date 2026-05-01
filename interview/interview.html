@@ -414,10 +414,14 @@ async function startInterview() {
   };
 
   if (state.engine === 'livekit' && window.LiveKitAdapter) {
-    state.adapter = new LiveKitAdapter(adapterOpts);
     try {
       const tokenData = await fetchToken('livekit');
       state.sessionId = tokenData.session_id;
+      // Pass the LiveKit URL from the token response to the adapter
+      state.adapter = new LiveKitAdapter({
+        ...adapterOpts,
+        serverUrl: tokenData.livekit_url,
+      });
       await state.adapter.connect(tokenData.token, tokenData.room_name);
       addMessage('system', `✅ Verbunden (Room: ${tokenData.room_name})`);
     } catch (e) {
@@ -426,15 +430,17 @@ async function startInterview() {
       showDemoGreeting();
     }
   } else if (state.engine === 'xai' && window.XaiRealtimeAdapter) {
-    state.adapter = new XaiRealtimeAdapter(adapterOpts);
     try {
       const tokenData = await fetchToken('xai');
       state.sessionId = tokenData.session_id;
-      // Load system prompt for xAI (it runs its own LLM)
+      state.adapter = new XaiRealtimeAdapter(adapterOpts);
+      // Build system prompt from selected module context
       const moduleOpt = document.getElementById('moduleSelect').selectedOptions[0];
-      const systemPrompt = `Du bist ein professioneller Interview-Agent für das Modul: ${moduleOpt?.textContent || 'Interview'}.`;
-      await state.adapter.connect(tokenData.token, systemPrompt);
-      addMessage('system', `✅ Verbunden (xAI Grok)`);
+      const topics = state.topics.map(t => t.label).join(', ');
+      const systemPrompt = `Du bist ein professioneller Interview-Agent für das Modul: ${moduleOpt?.textContent || 'Interview'}. Die Themen sind: ${topics}. Führe das Interview strukturiert durch, frage nach und fasse am Ende zusammen. Spreche Deutsch.`;
+      // xAI token response uses 'xai_token' field
+      await state.adapter.connect(tokenData.xai_token, systemPrompt);
+      addMessage('system', `✅ Verbunden (xAI Grok – ${tokenData.model || 'grok-3-mini'})`);
     } catch (e) {
       console.error('Token/Connect error:', e);
       addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
