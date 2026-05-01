@@ -229,6 +229,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); min-hei
 
 const SUPABASE_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgzNTA1MDIsImV4cCI6MjA1MzkyNjUwMn0.iYL0kJKpTpWDzERRNMXiPjbpxIMOFAl1YSTImedDhOI';
+const TOKEN_ENDPOINT = 'https://acp-n8n.2mo.ch/webhook/interview-token';
 
 // State
 let state = {
@@ -414,20 +415,53 @@ async function startInterview() {
 
   if (state.engine === 'livekit' && window.LiveKitAdapter) {
     state.adapter = new LiveKitAdapter(adapterOpts);
-    // TODO: Fetch token from n8n endpoint
-    addMessage('system', '⚠️ LiveKit Token-Endpoint noch nicht konfiguriert. Demo-Modus aktiv.');
-    showDemoGreeting();
+    try {
+      const tokenData = await fetchToken('livekit');
+      state.sessionId = tokenData.session_id;
+      await state.adapter.connect(tokenData.token, tokenData.room_name);
+      addMessage('system', `✅ Verbunden (Room: ${tokenData.room_name})`);
+    } catch (e) {
+      console.error('Token/Connect error:', e);
+      addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
+      showDemoGreeting();
+    }
   } else if (state.engine === 'xai' && window.XaiRealtimeAdapter) {
     state.adapter = new XaiRealtimeAdapter(adapterOpts);
-    // TODO: Fetch ephemeral token from n8n endpoint
-    addMessage('system', '⚠️ xAI Token-Endpoint noch nicht konfiguriert. Demo-Modus aktiv.');
-    showDemoGreeting();
+    try {
+      const tokenData = await fetchToken('xai');
+      state.sessionId = tokenData.session_id;
+      // Load system prompt for xAI (it runs its own LLM)
+      const moduleOpt = document.getElementById('moduleSelect').selectedOptions[0];
+      const systemPrompt = `Du bist ein professioneller Interview-Agent für das Modul: ${moduleOpt?.textContent || 'Interview'}.`;
+      await state.adapter.connect(tokenData.token, systemPrompt);
+      addMessage('system', `✅ Verbunden (xAI Grok)`);
+    } catch (e) {
+      console.error('Token/Connect error:', e);
+      addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
+      showDemoGreeting();
+    }
   } else {
     // Fallback: Demo mode without real adapter
     addMessage('system', 'Adapter nicht geladen — Demo-Modus aktiv.');
     showDemoGreeting();
   }
   state.isConnected = true;
+}
+
+// Fetch token from n8n endpoint
+async function fetchToken(engineType) {
+  const res = await fetch(TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: state.clientId,
+      module_id: state.moduleId,
+      engine_type: engineType,
+      session_id: state.sessionId,
+    }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 function showDemoGreeting() {
