@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Interview-Modul | Persona-Workshop</title>
+<meta name="description" content="Strukturiertes Voice-Interview zur Persona-Definition">
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-input: #1a1a26;
+  --bg-hover: #1e1e2e;
+  --accent: #6366f1;
+  --accent-glow: rgba(99,102,241,0.15);
+  --accent-light: #818cf8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+  --border: #1e293b;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --font: 'Inter', -apple-system, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; }
+
+/* ─── HEADER ─── */
+.header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; background:var(--bg-card); }
+.header h1 { font-size:18px; font-weight:600; background:linear-gradient(135deg,var(--accent-light),#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header .version { font-size:11px; color:var(--text-muted); background:var(--bg-input); padding:2px 8px; border-radius:4px; }
+
+/* ─── CONFIG BAR ─── */
+.config-bar { padding:12px 24px; border-bottom:1px solid var(--border); background:var(--bg-card); display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.config-group { display:flex; align-items:center; gap:6px; }
+.config-group label { font-size:12px; color:var(--text-muted); font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+.config-group select { background:var(--bg-input); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; font-size:13px; font-family:var(--font); cursor:pointer; min-width:160px; }
+.config-group select:focus { outline:none; border-color:var(--accent); }
+
+/* Engine Toggle */
+.engine-toggle { display:flex; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; }
+.engine-btn { padding:6px 14px; font-size:12px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-muted); font-family:var(--font); transition:all 0.2s; }
+.engine-btn.active { background:var(--accent); color:#fff; }
+
+/* ─── MAIN LAYOUT ─── */
+.main { display:grid; grid-template-columns:1fr 280px; height:calc(100vh - 110px); }
+
+/* ─── CHAT AREA ─── */
+.chat-area { display:flex; flex-direction:column; border-right:1px solid var(--border); }
+.chat-messages { flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:12px; }
+.chat-messages::-webkit-scrollbar { width:4px; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+.msg { max-width:80%; padding:10px 14px; border-radius:var(--radius); font-size:14px; line-height:1.5; animation:fadeIn 0.3s ease; }
+.msg.assistant { align-self:flex-start; background:var(--bg-card); border:1px solid var(--border); }
+.msg.user { align-self:flex-end; background:var(--accent); color:#fff; }
+.msg.system { align-self:center; background:transparent; color:var(--text-muted); font-size:12px; font-style:italic; }
+.msg .role-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+.msg.assistant .role-label { color:var(--accent-light); }
+.msg.user .role-label { color:rgba(255,255,255,0.7); }
+
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* Typing indicator */
+.typing-indicator { display:none; align-self:flex-start; padding:10px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); }
+.typing-indicator.visible { display:flex; gap:4px; align-items:center; }
+.typing-dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); animation:typingBounce 1.4s infinite; }
+.typing-dot:nth-child(2) { animation-delay:0.2s; }
+.typing-dot:nth-child(3) { animation-delay:0.4s; }
+@keyframes typingBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-6px); } }
+
+/* ─── CONTROLS BAR ─── */
+.controls { padding:12px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:12px; }
+.mic-btn { width:48px; height:48px; border-radius:50%; border:2px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:20px; }
+.mic-btn:hover { background:var(--accent-glow); }
+.mic-btn.active { background:var(--accent); color:#fff; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow:0 0 0 12px rgba(99,102,241,0); } }
+
+.audio-viz { flex:1; height:32px; background:var(--bg-input); border-radius:var(--radius-sm); overflow:hidden; position:relative; }
+.audio-viz canvas { width:100%; height:100%; }
+
+.ctrl-btn { padding:8px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-input); color:var(--text); cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+.ctrl-btn:hover { border-color:var(--accent); color:var(--accent-light); }
+.ctrl-btn.danger { border-color:var(--red); color:var(--red); }
+.ctrl-btn.danger:hover { background:rgba(239,68,68,0.1); }
+.ctrl-btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ctrl-btn.primary:hover { background:var(--accent-light); }
+.ctrl-btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+/* ─── SIDEBAR ─── */
+.sidebar { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+.sidebar-section { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+.sidebar-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+
+/* Topic Progress */
+.topic-item { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; }
+.topic-icon { font-size:14px; width:20px; text-align:center; }
+.topic-label { color:var(--text-dim); }
+.topic-item.completed .topic-label { color:var(--green); }
+.topic-item.active .topic-label { color:var(--text); font-weight:500; }
+.topic-item.active .topic-icon { animation:pulse 2s infinite; }
+
+/* Session Info */
+.info-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; }
+.info-label { color:var(--text-muted); }
+.info-value { font-weight:500; }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+.status-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+.status-dot.paused { background:var(--yellow); }
+.status-dot.completed { background:var(--accent); }
+
+/* ─── SESSIONS PANEL ─── */
+.sessions-panel { border-top:1px solid var(--border); background:var(--bg-card); padding:0; max-height:0; overflow:hidden; transition:max-height 0.3s ease; }
+.sessions-panel.open { max-height:300px; padding:16px 24px; overflow-y:auto; }
+.sessions-toggle { width:100%; padding:10px 24px; border:none; border-top:1px solid var(--border); background:var(--bg-card); color:var(--text-muted); cursor:pointer; font-size:12px; font-family:var(--font); font-weight:500; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; justify-content:center; gap:6px; transition:color 0.2s; }
+.sessions-toggle:hover { color:var(--text); }
+
+.session-row { display:grid; grid-template-columns:1fr 1fr 80px 100px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.session-row:last-child { border:none; }
+.session-client { font-weight:500; }
+.session-module { color:var(--text-dim); }
+.session-status { display:flex; align-items:center; gap:4px; font-size:12px; }
+.session-action .ctrl-btn { padding:4px 10px; font-size:11px; }
+
+/* ─── WELCOME SCREEN ─── */
+.welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; gap:16px; }
+.welcome-icon { font-size:64px; opacity:0.3; }
+.welcome h2 { font-size:22px; font-weight:600; }
+.welcome p { color:var(--text-dim); max-width:400px; line-height:1.6; font-size:14px; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .main { grid-template-columns:1fr; }
+  .sidebar { display:none; }
+  .msg { max-width:90%; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>🎙️ ACP Interview-Modul</h1>
+  <span class="version">PROTOTYPE v0.1</span>
+</div>
+
+<!-- CONFIG BAR -->
+<div class="config-bar">
+  <div class="config-group">
+    <label>Kunde</label>
+    <select id="clientSelect"><option value="">Wird geladen...</option></select>
+  </div>
+  <div class="config-group">
+    <label>Modul</label>
+    <select id="moduleSelect"><option value="">Wird geladen...</option></select>
+  </div>
+  <div class="config-group">
+    <label>Engine</label>
+    <div class="engine-toggle">
+      <button class="engine-btn active" data-engine="livekit" onclick="setEngine('livekit')">LiveKit/Claude</button>
+      <button class="engine-btn" data-engine="xai" onclick="setEngine('xai')">xAI/Grok</button>
+    </div>
+  </div>
+  <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Interview starten</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- Chat Area -->
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">🎙️</div>
+        <h2>Bereit für das Interview</h2>
+        <p>Wähle einen Kunden und ein Interview-Modul, dann klicke auf "Interview starten" um das Gespräch zu beginnen.</p>
+      </div>
+    </div>
+    <div class="typing-indicator" id="typingIndicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()" disabled title="Mikrofon">🎤</button>
+      <div class="audio-viz"><canvas id="audioCanvas"></canvas></div>
+      <button class="ctrl-btn" id="pauseBtn" onclick="pauseSession()" disabled>⏸ Pause</button>
+      <button class="ctrl-btn danger" id="endBtn" onclick="endSession()" disabled>⏹ Beenden</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">📋 Themen-Fortschritt</div>
+      <div id="topicProgress">
+        <div class="topic-item"><span class="topic-icon">⏳</span><span class="topic-label">Kein Modul gewählt</span></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">📊 Session-Info</div>
+      <div class="info-row"><span class="info-label">Dauer</span><span class="info-value" id="sessionDuration">00:00</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="sessionStatus"><span class="status-dot"></span> Bereit</span></div>
+      <div class="info-row"><span class="info-label">Messages</span><span class="info-value" id="msgCount">0</span></div>
+      <div class="info-row"><span class="info-label">Engine</span><span class="info-value" id="engineLabel">LiveKit/Claude</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sessions Toggle -->
+<button class="sessions-toggle" onclick="toggleSessions()">📂 Frühere Sessions <span id="sessionsArrow">▼</span></button>
+<div class="sessions-panel" id="sessionsPanel">
+  <div id="sessionsList"><p style="color:var(--text-muted); font-size:13px;">Keine früheren Sessions gefunden.</p></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// ACP Interview-Modul — Frontend Logic
+// ═══════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgzNTA1MDIsImV4cCI6MjA1MzkyNjUwMn0.iYL0kJKpTpWDzERRNMXiPjbpxIMOFAl1YSTImedDhOI';
+
+// State
+let state = {
+  clientId: null,
+  moduleId: null,
+  sessionId: null,
+  engine: 'livekit',
+  isRecording: false,
+  isConnected: false,
+  startTime: null,
+  durationTimer: null,
+  messageCount: 0,
+  topics: [],
+  currentTopicIndex: 0,
+  adapter: null,
+};
+
+// ─── Supabase Helper ───
+async function sbFetch(table, params = '') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  return res.json();
+}
+
+// ─── Init ───
+async function init() {
+  await loadClients();
+  await loadModules();
+  await loadSessions();
+}
+
+async function loadClients() {
+  const sel = document.getElementById('clientSelect');
+  try {
+    const clients = await sbFetch('clients', '?select=id,firma,slug&active=eq.true&order=firma');
+    sel.innerHTML = '<option value="">— Kunde wählen —</option>';
+    clients.forEach(c => {
+      sel.innerHTML += `<option value="${c.id}" data-slug="${c.slug}">${c.firma || c.slug}</option>`;
+    });
+    sel.onchange = () => { state.clientId = sel.value; checkReady(); };
+  } catch(e) { sel.innerHTML = '<option>Fehler beim Laden</option>'; }
+}
+
+async function loadModules() {
+  const sel = document.getElementById('moduleSelect');
+  try {
+    const modules = await sbFetch('interview_modules', '?select=id,slug,label,topics,estimated_duration_min&active=eq.true');
+    sel.innerHTML = '<option value="">— Modul wählen —</option>';
+    modules.forEach(m => {
+      sel.innerHTML += `<option value="${m.id}" data-topics='${JSON.stringify(m.topics)}' data-slug="${m.slug}">${m.label} (~${m.estimated_duration_min} Min.)</option>`;
+    });
+    sel.onchange = () => {
+      state.moduleId = sel.value;
+      const opt = sel.selectedOptions[0];
+      if (opt && opt.dataset.topics) {
+        state.topics = JSON.parse(opt.dataset.topics);
+        renderTopics();
+      }
+      checkReady();
+    };
+  } catch(e) { sel.innerHTML = '<option>Fehler beim Laden</option>'; }
+}
+
+async function loadSessions() {
+  const container = document.getElementById('sessionsList');
+  try {
+    const sessions = await sbFetch('interview_sessions',
+      '?select=id,status,created_at,engine_type,progress_percent,client_id,interview_modules(label)&order=created_at.desc&limit=10');
+    if (!sessions.length) return;
+    const clients = await sbFetch('clients', '?select=id,firma,slug');
+    const clientMap = {};
+    clients.forEach(c => clientMap[c.id] = c.firma || c.slug);
+
+    container.innerHTML = sessions.map(s => {
+      const statusIcon = s.status === 'paused' ? '⏸' : s.status === 'completed' ? '✅' : '●';
+      const statusClass = s.status;
+      const date = new Date(s.created_at).toLocaleDateString('de-CH');
+      const action = s.status === 'paused'
+        ? `<button class="ctrl-btn" onclick="resumeSession('${s.id}')" style="padding:4px 10px;font-size:11px;">Fortsetzen</button>`
+        : '';
+      return `<div class="session-row">
+        <span class="session-client">${clientMap[s.client_id] || '?'}</span>
+        <span class="session-module">${s.interview_modules?.label || '?'}</span>
+        <span class="session-status"><span class="status-dot ${statusClass}"></span>${s.progress_percent}%</span>
+        <span class="session-action">${action}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('Sessions laden:', e); }
+}
+
+function checkReady() {
+  document.getElementById('startBtn').disabled = !(state.clientId && state.moduleId);
+}
+
+// ─── Engine Toggle ───
+function setEngine(engine) {
+  state.engine = engine;
+  document.querySelectorAll('.engine-btn').forEach(b => b.classList.toggle('active', b.dataset.engine === engine));
+  document.getElementById('engineLabel').textContent = engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok';
+}
+
+// ─── Topic Rendering ───
+function renderTopics() {
+  const container = document.getElementById('topicProgress');
+  container.innerHTML = state.topics.map((t, i) => {
+    let icon = '⏳', cls = '';
+    if (i < state.currentTopicIndex) { icon = '✅'; cls = 'completed'; }
+    else if (i === state.currentTopicIndex && state.isConnected) { icon = '▶️'; cls = 'active'; }
+    return `<div class="topic-item ${cls}"><span class="topic-icon">${icon}</span><span class="topic-label">${t.label}</span></div>`;
+  }).join('');
+}
+
+// ─── Chat Messages ───
+function addMessage(role, content) {
+  const welcome = document.getElementById('welcomeScreen');
+  if (welcome) welcome.style.display = 'none';
+
+  const container = document.getElementById('chatMessages');
+  const msg = document.createElement('div');
+  msg.className = `msg ${role}`;
+  const label = role === 'assistant' ? '🤖 Agent' : role === 'user' ? '👤 Du' : '📌 System';
+  msg.innerHTML = `<div class="role-label">${label}</div>${escapeHtml(content)}`;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+  state.messageCount++;
+  document.getElementById('msgCount').textContent = state.messageCount;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showTyping(show) {
+  document.getElementById('typingIndicator').classList.toggle('visible', show);
+}
+
+// ─── Session Controls ───
+async function startInterview() {
+  addMessage('system', `Interview wird gestartet... (${state.engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok'})`);
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('micBtn').disabled = false;
+  document.getElementById('pauseBtn').disabled = false;
+  document.getElementById('endBtn').disabled = false;
+  state.isConnected = true;
+  state.startTime = Date.now();
+  state.durationTimer = setInterval(updateDuration, 1000);
+  document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Aktiv';
+  renderTopics();
+
+  // Simulate agent greeting (will be replaced by real adapter)
+  showTyping(true);
+  setTimeout(() => {
+    showTyping(false);
+    addMessage('assistant', 'Hallo! Hier ist Eusebius. Schön, dass du dir die Zeit nimmst. Wir erarbeiten heute gemeinsam deine Zielgruppen-Personas. Ich stelle dir dazu gezielte Fragen und am Ende haben wir klar definierte Personas für deine Content-Strategie. Bereit?');
+  }, 1500);
+}
+
+function toggleMic() {
+  state.isRecording = !state.isRecording;
+  const btn = document.getElementById('micBtn');
+  btn.classList.toggle('active', state.isRecording);
+  btn.title = state.isRecording ? 'Mikrofon aktiv — Klick zum Stummschalten' : 'Mikrofon';
+  if (state.isRecording) startAudioViz();
+  else stopAudioViz();
+}
+
+async function pauseSession() {
+  addMessage('system', 'Session wird pausiert...');
+  state.isConnected = false;
+  clearInterval(state.durationTimer);
+  document.getElementById('sessionStatus').innerHTML = '<span class="status-dot paused"></span> Pausiert';
+  document.getElementById('micBtn').disabled = true;
+  document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('startBtn').textContent = '▶ Fortsetzen';
+  renderTopics();
+}
+
+async function endSession() {
+  if (!confirm('Interview wirklich beenden?')) return;
+  addMessage('system', 'Interview beendet. Ergebnisse werden gespeichert...');
+  state.isConnected = false;
+  clearInterval(state.durationTimer);
+  document.getElementById('sessionStatus').innerHTML = '<span class="status-dot completed"></span> Abgeschlossen';
+  document.getElementById('micBtn').disabled = true;
+  document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('endBtn').disabled = true;
+  renderTopics();
+}
+
+async function resumeSession(sessionId) {
+  addMessage('system', `Session ${sessionId.substring(0,8)}... wird fortgesetzt`);
+  // TODO: Load session context and reconnect
+}
+
+function updateDuration() {
+  if (!state.startTime) return;
+  const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+  const min = Math.floor(elapsed / 60).toString().padStart(2, '0');
+  const sec = (elapsed % 60).toString().padStart(2, '0');
+  document.getElementById('sessionDuration').textContent = `${min}:${sec}`;
+}
+
+// ─── Audio Visualization ───
+let audioCtx, analyser, animFrame;
+function startAudioViz() {
+  const canvas = document.getElementById('audioCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = canvas.offsetHeight * 2;
+
+  // Simulated visualization (will be replaced by real audio data)
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const bars = 40;
+    const barW = canvas.width / bars;
+    for (let i = 0; i < bars; i++) {
+      const h = state.isRecording ? Math.random() * canvas.height * 0.8 : 2;
+      ctx.fillStyle = `rgba(99,102,241,${0.4 + Math.random() * 0.4})`;
+      ctx.fillRect(i * barW + 1, (canvas.height - h) / 2, barW - 2, h);
+    }
+    animFrame = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function stopAudioViz() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  const canvas = document.getElementById('audioCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+// ─── Sessions Panel ───
+function toggleSessions() {
+  const panel = document.getElementById('sessionsPanel');
+  const arrow = document.getElementById('sessionsArrow');
+  panel.classList.toggle('open');
+  arrow.textContent = panel.classList.contains('open') ? '▲' : '▼';
+}
+
+// ─── Boot ───
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
