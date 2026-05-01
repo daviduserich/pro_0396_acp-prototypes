@@ -167,31 +167,75 @@ class XaiRealtimeAdapter {
     switch (event.type) {
       case 'session.created':
         console.log('[xAI] Session created:', event.session?.id);
+        // ─── Auto-start: Let the bot speak first ───
+        this._sendEvent({ type: 'response.create' });
+        console.log('[xAI] Triggered initial response (bot starts first)');
         break;
         
+      case 'session.updated':
+        console.log('[xAI] Session updated');
+        break;
+        
+      // ─── Assistant transcript (text of what the bot says) ───
       case 'response.audio_transcript.delta':
-        // Agent is speaking — accumulate text
         this._responseBuffer += event.delta || '';
         break;
         
       case 'response.audio_transcript.done':
-        // Agent finished a response
         if (this._responseBuffer.trim()) {
+          console.log('[xAI] 🤖 Assistant said:', this._responseBuffer.trim().substring(0, 80) + '...');
           this.onMessage('assistant', this._responseBuffer.trim(), event);
-          this._responseBuffer = '';
+        }
+        this._responseBuffer = '';
+        break;
+      
+      // ─── Alternative event names (some xAI versions use these) ───
+      case 'response.text.delta':
+        this._responseBuffer += event.delta || '';
+        break;
+
+      case 'response.text.done':
+        if (this._responseBuffer.trim()) {
+          console.log('[xAI] 🤖 Assistant (text.done):', this._responseBuffer.trim().substring(0, 80) + '...');
+          this.onMessage('assistant', this._responseBuffer.trim(), event);
+        }
+        this._responseBuffer = '';
+        break;
+
+      case 'response.content_part.done':
+        // Some APIs send the full transcript here
+        const transcript = event.part?.transcript || event.part?.text || '';
+        if (transcript.trim()) {
+          console.log('[xAI] 🤖 Assistant (content_part.done):', transcript.substring(0, 80) + '...');
+          // Only use if buffer was empty (avoid duplicates)
+          if (!this._responseBuffer.trim()) {
+            this.onMessage('assistant', transcript.trim(), event);
+          }
+        }
+        break;
+
+      case 'response.output_item.done':
+        // Final output item — may contain transcript
+        const outputTranscript = event.item?.content?.[0]?.transcript || '';
+        if (outputTranscript.trim() && !this._lastAssistantMsg?.includes(outputTranscript.trim().substring(0, 20))) {
+          console.log('[xAI] 🤖 Assistant (output_item.done):', outputTranscript.substring(0, 80) + '...');
+          this.onMessage('assistant', outputTranscript.trim(), event);
+          this._lastAssistantMsg = outputTranscript.trim();
         }
         break;
         
+      // ─── Audio playback ───
+      case 'response.audio.delta':
       case 'response.output_audio.delta':
-        // Raw audio chunk — queue for playback
         if (event.delta) {
           this._queueAudio(event.delta);
         }
         break;
         
+      // ─── User speech transcription ───
       case 'conversation.item.input_audio_transcription.completed':
-        // User speech transcribed
         if (event.transcript?.trim()) {
+          console.log('[xAI] 👤 User said:', event.transcript.trim().substring(0, 80) + '...');
           this.onMessage('user', event.transcript.trim(), event);
         }
         break;
@@ -203,16 +247,23 @@ class XaiRealtimeAdapter {
       case 'input_audio_buffer.speech_stopped':
         console.log('[xAI] User stopped speaking');
         break;
+
+      case 'response.created':
+      case 'response.done':
+      case 'rate_limits.updated':
+      case 'input_audio_buffer.committed':
+      case 'conversation.item.created':
+        // Known events, no action needed
+        console.debug('[xAI] Event:', event.type);
+        break;
         
       case 'error':
         console.error('[xAI] Server error:', event.error);
         break;
         
       default:
-        // Log unknown events in dev
-        if (event.type && !event.type.startsWith('response.audio.')) {
-          console.debug('[xAI] Event:', event.type);
-        }
+        // ─── LOG ALL UNKNOWN EVENTS (critical for debugging) ───
+        console.warn('[xAI] ⚠️ Unhandled event:', event.type, JSON.stringify(event).substring(0, 200));
     }
   }
 
