@@ -805,8 +805,9 @@ function startAudioViz() {
 function stopAudioViz() {
   if (animFrame) cancelAnimationFrame(animFrame);
   const canvas = document.getElementById('audioCanvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 // ─── Sidebar Toggle & Resize ───

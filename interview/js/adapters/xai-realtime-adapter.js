@@ -167,64 +167,48 @@ class XaiRealtimeAdapter {
     switch (event.type) {
       case 'session.created':
         console.log('[xAI] Session created:', event.session?.id);
-        // ─── Auto-start: Let the bot speak first ───
-        this._sendEvent({ type: 'response.create' });
-        console.log('[xAI] Triggered initial response (bot starts first)');
         break;
         
       case 'session.updated':
-        console.log('[xAI] Session updated');
+        console.log('[xAI] Session updated — config applied');
+        // ─── Auto-start: Bot speaks first AFTER config is applied ───
+        if (!this._initialResponseSent) {
+          this._initialResponseSent = true;
+          this._sendEvent({ type: 'response.create' });
+          console.log('[xAI] 🚀 Triggered initial response (bot starts first)');
+        }
         break;
         
-      // ─── Assistant transcript (text of what the bot says) ───
-      case 'response.audio_transcript.delta':
+      // ═══ Assistant transcript — xAI uses "output_audio_transcript" ═══
+      case 'response.output_audio_transcript.delta':
         this._responseBuffer += event.delta || '';
         break;
         
-      case 'response.audio_transcript.done':
+      case 'response.output_audio_transcript.done':
         if (this._responseBuffer.trim()) {
-          console.log('[xAI] 🤖 Assistant said:', this._responseBuffer.trim().substring(0, 80) + '...');
+          console.log('[xAI] 🤖 Assistant:', this._responseBuffer.trim().substring(0, 100));
           this.onMessage('assistant', this._responseBuffer.trim(), event);
+          this._lastAssistantMsg = this._responseBuffer.trim();
         }
         this._responseBuffer = '';
         break;
-      
-      // ─── Alternative event names (some xAI versions use these) ───
+
+      // ═══ Fallback: OpenAI-style event names (just in case) ═══
+      case 'response.audio_transcript.delta':
       case 'response.text.delta':
         this._responseBuffer += event.delta || '';
         break;
 
+      case 'response.audio_transcript.done':
       case 'response.text.done':
         if (this._responseBuffer.trim()) {
-          console.log('[xAI] 🤖 Assistant (text.done):', this._responseBuffer.trim().substring(0, 80) + '...');
+          console.log('[xAI] 🤖 Assistant (fallback):', this._responseBuffer.trim().substring(0, 100));
           this.onMessage('assistant', this._responseBuffer.trim(), event);
         }
         this._responseBuffer = '';
         break;
 
-      case 'response.content_part.done':
-        // Some APIs send the full transcript here
-        const transcript = event.part?.transcript || event.part?.text || '';
-        if (transcript.trim()) {
-          console.log('[xAI] 🤖 Assistant (content_part.done):', transcript.substring(0, 80) + '...');
-          // Only use if buffer was empty (avoid duplicates)
-          if (!this._responseBuffer.trim()) {
-            this.onMessage('assistant', transcript.trim(), event);
-          }
-        }
-        break;
-
-      case 'response.output_item.done':
-        // Final output item — may contain transcript
-        const outputTranscript = event.item?.content?.[0]?.transcript || '';
-        if (outputTranscript.trim() && !this._lastAssistantMsg?.includes(outputTranscript.trim().substring(0, 20))) {
-          console.log('[xAI] 🤖 Assistant (output_item.done):', outputTranscript.substring(0, 80) + '...');
-          this.onMessage('assistant', outputTranscript.trim(), event);
-          this._lastAssistantMsg = outputTranscript.trim();
-        }
-        break;
-        
-      // ─── Audio playback ───
+      // ═══ Audio playback ═══
       case 'response.audio.delta':
       case 'response.output_audio.delta':
         if (event.delta) {
@@ -232,10 +216,10 @@ class XaiRealtimeAdapter {
         }
         break;
         
-      // ─── User speech transcription ───
+      // ═══ User speech transcription ═══
       case 'conversation.item.input_audio_transcription.completed':
         if (event.transcript?.trim()) {
-          console.log('[xAI] 👤 User said:', event.transcript.trim().substring(0, 80) + '...');
+          console.log('[xAI] 👤 User:', event.transcript.trim().substring(0, 100));
           this.onMessage('user', event.transcript.trim(), event);
         }
         break;
@@ -248,22 +232,29 @@ class XaiRealtimeAdapter {
         console.log('[xAI] User stopped speaking');
         break;
 
+      // ═══ Known lifecycle events (no action needed) ═══
       case 'response.created':
       case 'response.done':
+      case 'response.output_audio.done':
+      case 'response.output_item.added':
+      case 'response.output_item.done':
+      case 'response.content_part.added':
+      case 'response.content_part.done':
       case 'rate_limits.updated':
       case 'input_audio_buffer.committed':
+      case 'conversation.created':
       case 'conversation.item.created':
-        // Known events, no action needed
-        console.debug('[xAI] Event:', event.type);
+      case 'conversation.item.added':
+      case 'ping':
+        // Silently acknowledge known events
         break;
         
       case 'error':
-        console.error('[xAI] Server error:', event.error);
+        console.error('[xAI] ❌ Server error:', event.error);
         break;
         
       default:
-        // ─── LOG ALL UNKNOWN EVENTS (critical for debugging) ───
-        console.warn('[xAI] ⚠️ Unhandled event:', event.type, JSON.stringify(event).substring(0, 200));
+        console.warn('[xAI] ⚠️ Unhandled event:', event.type, JSON.stringify(event).substring(0, 300));
     }
   }
 
