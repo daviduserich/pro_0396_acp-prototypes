@@ -97,6 +97,13 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 @keyframes micGlow { 0%,100% { box-shadow:0 0 8px rgba(34,197,94,0.3); } 50% { box-shadow:0 0 18px rgba(34,197,94,0.5); } }
 .mic-btn:disabled { border-color:var(--border); color:var(--text-muted); background:transparent; animation:none; box-shadow:none; }
 
+/* Mic instruction banner */
+.mic-hint { display:flex; align-items:center; gap:10px; padding:10px 16px; margin:8px 0; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; font-size:13px; color:var(--text); animation:hintPulse 2s ease-in-out 3; }
+.mic-hint .hint-icon { font-size:24px; flex-shrink:0; }
+.mic-hint .hint-text { line-height:1.4; }
+.mic-hint .hint-key { display:inline-block; padding:2px 6px; background:rgba(255,255,255,0.1); border:1px solid var(--border); border-radius:4px; font-family:monospace; font-size:11px; }
+@keyframes hintPulse { 0%,100% { opacity:1; } 50% { opacity:0.7; border-color:var(--accent); } }
+
 .ctrl-btn { padding:8px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-input); color:var(--text); cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
 .ctrl-btn:hover { border-color:var(--accent); color:var(--accent-light); }
 .ctrl-btn.danger { border-color:var(--red); color:var(--red); }
@@ -524,6 +531,17 @@ async function startInterview() {
       await state.adapter.connect(tokenData.xai_token, systemPrompt);
       addMessage('system', `✅ Verbunden (xAI Grok – ${tokenData.model || 'grok-3-mini'})`);
       addMessage('system', `📋 Kontext geladen: ${state.clientContext?.name || 'Kein Client'} (${state.clientContext?.industry || '?'}, ${state.clientContext?.region || '?'})`);
+      
+      // ─── Mic hint banner ───
+      showMicHint();
+      
+      // ─── Auto-enable mic after bot greeting (3s delay) ───
+      setTimeout(() => {
+        if (state.adapter && !state.isRecording) {
+          toggleMic();
+          console.log('[Interview] 🎤 Mic auto-enabled after bot greeting');
+        }
+      }, 3000);
     } catch (e) {
       console.error('Token/Connect error:', e);
       addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
@@ -687,7 +705,12 @@ async function buildSystemPrompt(moduleName, topics) {
   prompt += `Die Themen fuer dieses Interview sind: ${topics}\n`;
   prompt += `Fuehre das Interview strukturiert durch diese Themen. Frage gezielt nach und fasse am Ende zusammen.\n`;
   prompt += `Spreche ${ctx?.tone === 'du' ? 'den Interviewpartner mit Du an' : 'den Interviewpartner mit Sie an'}.\n`;
-  prompt += `Spreche Deutsch.`;
+  prompt += `Spreche Deutsch.\n\n`;
+  prompt += `═══ ERSTE BEGRUESSUNG ═══\n`;
+  prompt += `Beginne das Gespraech mit einer kurzen, freundlichen Begruessung. Stelle dich als Eusebius vor.\n`;
+  prompt += `Erwaehne kurz das Thema des Interviews und die Firma.\n`;
+  prompt += `Sage dem Interviewpartner, dass das Mikrofon jetzt aktiv ist und er direkt anfangen kann zu sprechen.\n`;
+  prompt += `Halte die Begruessung unter 3 Saetzen und stelle dann deine erste Frage.`;
   
   console.log('[System Prompt]', prompt);
   return prompt;
@@ -709,6 +732,31 @@ async function fetchToken(engineType) {
   return res.json();
 }
 
+// ─── Mic Onboarding Hint ───
+function showMicHint() {
+  const container = document.getElementById('chatMessages');
+  const hint = document.createElement('div');
+  hint.className = 'mic-hint';
+  hint.id = 'micHint';
+  hint.innerHTML = `
+    <div class="hint-icon">🎤</div>
+    <div class="hint-text">
+      <strong>Mikrofon-Steuerung:</strong><br>
+      Klicken Sie auf den <span style="color:var(--red)">●</span> Mikrofon-Button unten links um Ihr Mikrofon zu aktivieren. 
+      Er wird dann <span style="color:var(--green)">● grün leuchten</span>. 
+      Sie können jederzeit stumm schalten durch erneutes Klicken.
+    </div>
+  `;
+  container.appendChild(hint);
+  container.scrollTop = container.scrollHeight;
+  
+  // Auto-fade after 15s
+  setTimeout(() => {
+    const el = document.getElementById('micHint');
+    if (el) { el.style.transition = 'opacity 1s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 1000); }
+  }, 15000);
+}
+
 function showDemoGreeting() {
   showTyping(true);
   setTimeout(() => {
@@ -722,6 +770,12 @@ function toggleMic() {
   const btn = document.getElementById('micBtn');
   btn.classList.toggle('active', state.isRecording);
   btn.title = state.isRecording ? '🟢 Mikrofon aktiv — Klick zum Stummschalten' : '🔴 Mikrofon aus';
+
+  // Remove mic hint once user activates
+  if (state.isRecording) {
+    const hint = document.getElementById('micHint');
+    if (hint) hint.remove();
+  }
 
   // Use real adapter if available
   if (state.adapter && state.adapter.setMicEnabled) {
