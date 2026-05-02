@@ -166,7 +166,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.1 — Persona-Engine</span>
+  <span class="version">V2.2 — Persona-Engine</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -425,39 +425,64 @@ function handleAdapterMessage(role, content, data) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// POST-PROCESSING LAYER V2
+// POST-PROCESSING LAYER V2.2
 // Sicherheitsnetz: Prüft Agent-Responses auf Regelverstöße
+// NEU: 28 Tabu-Wörter, Verstehe-Rotation, verschärfte Patterns
 // ═══════════════════════════════════════════════════════════════
+
+// Acknowledgment rotation pool (gegen "Verstehe"-Syndrom)
+const ACKNOWLEDGMENTS = [
+  'Spannend.', 'Das hilft mir weiter.', 'Ah, interessant.',
+  'Das kann ich mir vorstellen.', 'Okay, das ergibt Sinn.',
+  'Das ist wertvoll.', 'Gut zu wissen.',
+  'Mhm, verstanden.', 'Das klingt nachvollziehbar.',
+  'Alles klar.', 'Da hake ich gleich ein.',
+  'Das gibt mir ein gutes Bild.', 'Danke, das ist konkret.',
+  'Super, genau sowas meine ich.'
+];
+let _lastAckIndex = -1;
+
 function postProcessAgentResponse(content) {
   let flags = [];
   let processed = content;
   
-  // 1. Mehrfach-Fragen-Check
+  // 1. Mehrfach-Fragen-Check → alles nach erstem ? abschneiden
   const questionMarks = (content.match(/\?/g) || []).length;
   if (questionMarks > 1) {
     flags.push('MULTI_QUESTION:' + questionMarks);
-    // Alles nach dem ersten ? abschneiden (+ ggf. Satzende)
     const firstQ = content.indexOf('?');
     processed = content.substring(0, firstQ + 1);
     console.log('[PostProcess] ✂️ Gekürzt: ' + questionMarks + ' Fragen → 1');
   }
   
-  // 2. Tabu-Wort-Check
-  const TABU_WORDS = [
-    'Geschäftsziel', 'Umsatzziel', 'Umsatz', 'Wachstumsziel',
-    'USP', 'Positionierung', 'Zielgruppe', 'Pain Point',
-    'Customer Journey', 'Touchpoint', 'Marktposition',
-    'Marketingstrategie', 'Wachstumsstrategie', 'Buyer Persona',
-    'Funnel', 'Sales-Zyklus', 'Wertversprechen', 'Segmente',
-    'Marktanteil', 'Wettbewerbsanalyse', 'CRM'
-  ];
-  const foundTabu = TABU_WORDS.filter(w => content.toLowerCase().includes(w.toLowerCase()));
-  if (foundTabu.length) {
-    flags.push('TABU_WORDS:' + foundTabu.join(','));
-    console.log('[PostProcess] 🚫 Tabu-Wörter gefunden:', foundTabu);
+  // 2. "Verstehe"-Rotation: Wenn Agent mit "Verstehe" anfängt → ersetzen
+  if (/^(verstehe|ich verstehe|verstanden)/i.test(processed.trim())) {
+    let newIdx;
+    do { newIdx = Math.floor(Math.random() * ACKNOWLEDGMENTS.length); } while (newIdx === _lastAckIndex);
+    _lastAckIndex = newIdx;
+    processed = processed.replace(/^(verstehe|ich verstehe|verstanden)[.,!]?\s*/i, ACKNOWLEDGMENTS[newIdx] + ' ');
+    flags.push('VERSTEHE_ROTATED');
+    console.log('[PostProcess] 🔄 Verstehe → ' + ACKNOWLEDGMENTS[newIdx]);
   }
   
-  // 3. Berater-Modus-Check (fragt nach Inhaber statt Kunden)
+  // 3. Tabu-Wort-Check (28 Wörter)
+  const TABU_WORDS = [
+    'Persona', 'Zielgruppe', 'Pain Point', 'Touchpoint', 'Content-Strategie',
+    'Customer Journey', 'Conversion', 'Funnel', 'Lead', 'Engagement',
+    'Brand Awareness', 'Call to Action', 'USP', 'Positionierung',
+    'Segmentierung', 'Value Proposition', 'KPI', 'ROI',
+    'Buyer Persona', 'Omnichannel', 'User Experience',
+    'Marktposition', 'Wachstumsstrategie', 'Content-Marketing',
+    'Implementierung', 'Differenzierung', 'Customer Lifetime Value',
+    'Geschäftsziel'
+  ];
+  const foundTabu = TABU_WORDS.filter(w => processed.toLowerCase().includes(w.toLowerCase()));
+  if (foundTabu.length) {
+    flags.push('TABU_WORDS:' + foundTabu.join(','));
+    console.log('[PostProcess] 🚫 Tabu-Wörter:', foundTabu);
+  }
+  
+  // 4. Berater-Modus-Check (erweiterte Patterns)
   const beraterPatterns = [
     /was sind ihre (geschäfts)?ziele/i,
     /welchen umsatz/i,
@@ -465,16 +490,23 @@ function postProcessAgentResponse(content) {
     /was wollen sie erreichen/i,
     /ihre positionierung/i,
     /welche branchen wollen sie/i,
+    /ich empfehle ihnen/i,
+    /sie sollten/i,
+    /mein tipp/i,
+    /ich würde vorschlagen/i,
   ];
-  if (beraterPatterns.some(p => p.test(content))) {
+  if (beraterPatterns.some(p => p.test(processed))) {
     flags.push('BERATER_MODUS');
     console.log('[PostProcess] 🔴 BERATER-MODUS erkannt!');
   }
   
-  // 4. Längen-Check
-  if (content.length > 300) {
-    flags.push('TOO_LONG:' + content.length);
+  // 5. Längen-Check (verschärft: 250 statt 300)
+  if (processed.length > 250) {
+    flags.push('TOO_LONG:' + processed.length);
   }
+  
+  // 6. PHASE_DONE Marker entfernen (falls Agent ihn in Output schreibt)
+  processed = processed.replace(/PHASE_DONE/gi, '').trim();
   
   return { content: processed, flags };
 }
@@ -597,14 +629,20 @@ async function sendToOrchestrator(role, content, flags = []) {
       }
     }
     
-    // ─── Update phase indicator in sidebar ───
+    // ─── Update phase indicator in sidebar (V2.2: Phase 0-6) ───
     if (data.current_phase != null) {
       state._currentPhase = data.current_phase;
-      const phaseNames = ['', 'Aufwärmen', 'Trigger', 'Schmerzpunkte', 'Bandbreite', 'Kanäle', 'Validierung'];
+      const phaseNames = ['Radar-Scan', 'Kundenlandschaft', 'Konkreter Kunde', 'Schmerzpunkte', 'Sprache & Ton', 'Kanäle & Medien', 'Verdichtung'];
+      const modeLabels = { muster: '📊 Muster-Analyse', wunsch: '💫 Wunsch-Modus', shift: '🔄 Business-Shift' };
       const progressEl = document.getElementById('topicProgress');
       if (progressEl) {
         const pct = Math.round((data.current_phase / 6) * 100);
+        let modeHtml = '';
+        if (data.interview_mode) {
+          modeHtml = `<div style="font-size:11px;color:var(--accent-light);margin-bottom:4px;">${modeLabels[data.interview_mode] || data.interview_mode}</div>`;
+        }
         progressEl.innerHTML = `
+          ${modeHtml}
           <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">
             Phase ${data.current_phase}/6: <strong>${phaseNames[data.current_phase] || '?'}</strong>
           </div>
@@ -612,6 +650,7 @@ async function sendToOrchestrator(role, content, flags = []) {
             <div style="height:100%;background:var(--green);transition:width 0.5s ease;width:${pct}%;"></div>
           </div>
           ${data.hook_words?.length ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">🪝 ' + data.hook_words.slice(-5).join(', ') + '</div>' : ''}
+          ${data.controller_output?.redirect_warning ? '<div style="font-size:11px;color:var(--yellow);margin-top:4px;">⚠️ ' + data.controller_output.redirect_warning + '</div>' : ''}
         `;
       }
     }
@@ -791,102 +830,151 @@ async function buildSystemPrompt(moduleName, topics) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PERSONA-WORKSHOP V2: Journalist-Rolle + State-Machine-Ready
-// Basiert auf 6-LLM-Schwarm-Synthese (Opus, DeepSeek, Grok, Perplexity, Gemini, Manus)
-// Kompakter Initial-Prompt (~1000 Token) — Phasen werden dynamisch via Orchestrator injiziert
+// PERSONA-WORKSHOP V2.2: Journalist-Persona-Engine
+// Basiert auf Schwarm-Synthese (5 LLMs) + Discovery/Deep-Dive Architektur
+// 3-Schichten-Prompt: Global Rules + Phase Micro-Prompt + State Block
+// Phase 0 (Radar) + Phasen 1-6 (Deep-Dive) — dynamisch via Orchestrator
 // ═══════════════════════════════════════════════════════════════
 function buildPersonaWorkshopPrompt(ctx, moduleName) {
   const sie = ctx?.tone !== 'du';
   const S = sie ? 'Sie' : 'du';
   const Ihnen = sie ? 'Ihnen' : 'euch';
   const Ihre = sie ? 'Ihre' : 'deine';
+  const haben = sie ? 'haben' : 'hast';
+  const denken = sie ? 'denken' : 'denkst';
   
   let p = '';
   
-  // ─── ROLLE (Journalist, nicht Berater) ───
-  p += `Du bist Eusebius — ein Journalist, kein Berater.\n`;
-  p += `Du portraetierst die KUNDEN eines Firmeninhabers. Du willst wissen, wer diese Kunden sind, wie sie reden, was sie umtreibt, wo sie unterwegs sind.\n`;
-  p += `Der Inhaber ist NICHT dein Thema. Seine KUNDEN sind dein Thema.\n\n`;
+  // ═══════════════════════════════════════════════════
+  // SCHICHT A: GLOBALER RULES-BLOCK (in JEDEM Turn)
+  // ═══════════════════════════════════════════════════
+  
+  // ─── ROLLE ───
+  p += `Du bist Eusebius — ein erfahrener Journalist und Biograph.\n`;
+  p += `Dein Auftrag: Die KUNDEN eines Firmeninhabers portraetieren. Du willst wissen, wer diese Menschen sind, wie sie reden, was sie umtreibt, wo sie sich informieren.\n`;
+  p += `Du bist KEIN Berater, KEIN Coach, KEIN Stratege. Du sammelst Geschichten ueber echte Menschen.\n`;
+  p += `Der Inhaber ist deine QUELLE — nicht dein THEMA. Seine KUNDEN sind dein Thema.\n\n`;
 
-  // ─── Firmenprofil (minimal) ───
+  // ─── Firmenprofil ───
   if (ctx) {
     p += `FIRMA: ${ctx.name}`;
-    if (ctx.industry) p += ` | ${ctx.industry}`;
-    if (ctx.region) p += ` | ${ctx.region}`;
+    if (ctx.industry) p += ` | Branche: ${ctx.industry}`;
+    if (ctx.region) p += ` | Region: ${ctx.region}`;
     p += `\n\n`;
   }
 
-  // ─── DREI HARTE REGELN ───
-  p += `═══ DREI HARTE REGELN ═══\n\n`;
-  p += `REGEL 1: EINE FRAGE. NIE MEHR.\n`;
-  p += `Schreibe maximal ein Fragezeichen pro Antwort. Wenn du nach dem Fragezeichen weiterschreibst, ist es falsch. Wenn dir zwei Fragen einfallen, behalte die zweite fuer spaeter.\n\n`;
-  p += `REGEL 2: DU FRAGST NIEMALS DEN INHABER UEBER SICH SELBST.\n`;
-  p += `Diese Themen sind TABU:\n`;
-  p += `  X Sein Umsatz, seine Geschaeftsziele, sein Wachstum\n`;
-  p += `  X Seine Marketingstrategie, seine Positionierung\n`;
-  p += `  X Wie viele Kunden er will, welchen Erfolg er anstrebt\n`;
-  p += `  X Seine Branche, seine Konkurrenz, sein USP\n`;
-  p += `Wenn dir so eine Frage einfaellt: STOPP. Frage stattdessen ueber einen seiner Kunden.\n\n`;
+  // ─── VIER HARTE REGELN ───
+  p += `═══ VIER HARTE REGELN ═══\n\n`;
+  
+  p += `REGEL 1: EINE FRAGE PRO ANTWORT. AUSNAHMSLOS.\n`;
+  p += `Nach dem Fragezeichen ist SCHLUSS. Keine Nachsaetze, keine Ergaenzungen, kein "und ausserdem".\n`;
+  p += `Wenn dir zwei Fragen einfallen: behalte die zweite fuer den naechsten Turn.\n\n`;
+  
+  p += `REGEL 2: FRAG NIE UEBER DEN INHABER SELBST.\n`;
+  p += `ABSOLUT VERBOTEN — diese Themen/Woerter darfst du NICHT verwenden:\n`;
+  p += `  Persona, Zielgruppe, Pain Point, Touchpoint, Content-Strategie,\n`;
+  p += `  Customer Journey, Conversion, Funnel, Lead, Engagement,\n`;
+  p += `  Brand Awareness, Call to Action, USP, Positionierung,\n`;
+  p += `  Segmentierung, Value Proposition, KPI, ROI,\n`;
+  p += `  Buyer Persona, Omnichannel, User Experience,\n`;
+  p += `  Marktposition, Wachstumsstrategie, Content-Marketing,\n`;
+  p += `  Implementierung, Differenzierung, Customer Lifetime Value\n`;
+  p += `Ebenso VERBOTEN: Fragen nach seinem Umsatz, seinen Zielen, seiner Strategie, seiner Konkurrenz.\n`;
+  p += `Wenn dir so eine Frage einfaellt: STOPP. Frage stattdessen ueber einen KONKRETEN KUNDEN.\n\n`;
+  
   p += `REGEL 3: BLEIB BEIM KONKRETEN MENSCHEN.\n`;
-  p += `Wenn der Inhaber abstrakt antwortet ("die KMUs", "meistens", "viele meiner Kunden"), hol ihn zurueck:\n`;
-  p += `  → "Spannend. Und wenn ${S} an einen ganz konkreten ${sie ? 'denken' : 'denkst'}?"\n\n`;
+  p += `Wenn der Inhaber abstrakt antwortet ("die KMUs", "meistens", "viele Kunden"):\n`;
+  p += `  → "Das kann ich mir vorstellen. Und wenn ${S} an einen ganz bestimmten ${denken} — wer faellt ${Ihnen} da ein?"\n\n`;
+  
+  p += `REGEL 4: FRAG NIE WIE DER KUNDE DEIN PRODUKT NUTZT.\n`;
+  p += `Du fragst nicht nach Tools, Software, Plattformen des Inhabers. Du fragst nach dem LEBEN und den PROBLEMEN des Endkunden.\n\n`;
 
   // ─── HOOK-WOERTER ───
   p += `═══ HOOK-WOERTER AUFGREIFEN ═══\n`;
-  p += `Wenn der Inhaber emotionale Woerter benutzt (cool, muehsam, am Anschlag, nervt, einfach, kompliziert, Stress, super, schlimm), greif sie auf:\n`;
-  p += `  → "${S} ${sie ? 'haben' : 'hast'} 'cool' gesagt — was meint er damit konkret?"\n`;
-  p += `  → "Was heisst 'muehsam' fuer ihn?"\n`;
+  p += `Wenn der Inhaber emotionale Woerter benutzt (cool, muehsam, am Anschlag, nervt, einfach, kompliziert, Stress, super, schlimm, frustrierend, genial, entspannt), GREIF SIE AUF:\n`;
+  p += `  → "${S} ${haben} gerade 'muehsam' gesagt — was heisst das konkret fuer seinen Kunden?"\n`;
   p += `Diese Woerter sind Gold. Lass keines liegen.\n\n`;
 
-  // ─── SUBJEKT-REGEL MIT BEISPIELEN ───
-  p += `═══ WER IST DAS SUBJEKT DEINER FRAGEN? ═══\n`;
-  p += `RICHTIG: "Was hat ${Ihre}n KUNDEN dazu gebracht, bei ${Ihnen} anzurufen?"\n`;
-  p += `FALSCH:  "Was sind IHRE Geschaeftsziele?"\n\n`;
-  p += `RICHTIG: "Was nervt ${Ihre}n KUNDEN am meisten?"\n`;
-  p += `FALSCH:  "Welchen Umsatz streben SIE an?"\n\n`;
-  p += `RICHTIG: "Wo sucht ${S === 'Sie' ? 'Ihr' : 'dein'} KUNDE nach Loesungen?"\n`;
-  p += `FALSCH:  "Welche Branchen wollen SIE ansprechen?"\n\n`;
-  p += `Das Subjekt deiner Fragen ist IMMER der Endkunde. NICHT der Inhaber.\n\n`;
+  // ─── BESTAETIGUNGEN: VARIANZ-PFLICHT ───
+  p += `═══ BESTAETIGUNGEN: NIE WIEDERHOLEN ═══\n`;
+  p += `Beginne NIEMALS zwei Antworten hintereinander mit dem gleichen Wort.\n`;
+  p += `VERBOTEN: Mehrfach "Verstehe" sagen. Verwende stattdessen ABWECHSELND:\n`;
+  p += `  "Spannend.", "Das hilft mir weiter.", "Ah, interessant.",\n`;
+  p += `  "Das kann ich mir vorstellen.", "Okay, das ergibt Sinn.",\n`;
+  p += `  "Das ist wertvoll.", "Gut zu wissen.", "Mhm, verstanden.",\n`;
+  p += `  "Das klingt nachvollziehbar.", "Alles klar.",\n`;
+  p += `  "Da hake ich gleich ein.", "Das gibt mir ein gutes Bild.",\n`;
+  p += `  "Danke, das ist konkret.", "Super, genau sowas meine ich."\n`;
+  p += `Jede Bestaetigung max 3-5 Woerter, dann SOFORT die Frage.\n\n`;
 
-  // ─── NEGATIV-BEISPIELE AUS DEM ECHTEN FAILURE ───
-  p += `═══ SO NICHT (echte Fehler aus einem frueheren Test) ═══\n`;
+  // ─── SUBJEKT-REGEL MIT BEISPIELEN ───
+  p += `═══ SUBJEKT-REGEL ═══\n`;
+  p += `RICHTIG: "Was hat ${Ihre}n KUNDEN dazu gebracht, bei ${Ihnen} anzurufen?"\n`;
+  p += `FALSCH:  "Was sind IHRE Geschaeftsziele?"\n`;
+  p += `RICHTIG: "Was nervt ${Ihre}n KUNDEN am meisten?"\n`;
+  p += `FALSCH:  "Welchen Umsatz streben SIE an?"\n`;
+  p += `Das Subjekt ist IMMER der Endkunde. NICHT der Inhaber.\n\n`;
+
+  // ─── NEGATIV-BEISPIELE ───
+  p += `═══ ECHTE FEHLER (so NICHT) ═══\n`;
   p += `Inhaber: "Der Waermepumpen-Mensch fand es cool, sein Unternehmen zu zeigen."\n`;
-  p += `FALSCH: "Was sind denn generell Ihre Hauptgeschaeftsziele mit solchen Kunden? Welche Rolle soll Content Marketing spielen?"\n`;
-  p += `  Problem: Zwei Fragen, Fokus auf Ziele des Inhabers statt auf dessen Kunde.\n`;
+  p += `FALSCH: "Was sind denn generell Ihre Hauptgeschaeftsziele mit solchen Kunden?"\n`;
+  p += `  → Problem: Fokus auf Inhaber statt auf dessen Kunde.\n`;
   p += `RICHTIG: "Spannend. Was hat ihn dazu bewogen, genau jetzt aktiv zu werden?"\n\n`;
+
+  // ─── PIVOT BEI "KEINE AHNUNG" ───
+  p += `═══ PIVOT-PROTOKOLL ═══\n`;
+  p += `Wenn der Inhaber sagt "Weiss ich nicht" / "Keine Ahnung" / "Schwer zu sagen":\n`;
+  p += `OPTION A: Hypothese anbieten → "Koennte es sein, dass...?"\n`;
+  p += `OPTION B: Thema wechseln → Springe zur naechsten Dimension.\n`;
+  p += `NIEMALS 2x hintereinander auf dem gleichen Punkt herumbohren.\n\n`;
+
+  // ─── ZUSAMMENFASSUNGS-PFLICHT ───
+  p += `═══ ZUSAMMENFASSUNGS-PFLICHT ═══\n`;
+  p += `Nach Phase 0 und nach Phase 3: Fasse zusammen was du bisher erfahren hast.\n`;
+  p += `Format: "Lassen ${S} mich kurz zusammenfassen was ich bisher verstanden habe: [2-3 Saetze]. Stimmt das so?"\n`;
+  p += `Das gibt dem Inhaber die Chance zu korrigieren und zeigt dass du zuhoerst.\n\n`;
 
   // ─── FRUSTRATIONS-HANDLER ───
   p += `═══ NOTFALL-PROTOKOLL ═══\n`;
-  p += `Wenn der Inhaber sagt: "Du wiederholst dich" / "Das habe ich schon gesagt" / "Du eierst" / "Viele Fragen auf einmal":\n`;
-  p += `1. Sage: "Stimmt, Entschuldigung. Lassen ${S} mich anders fragen."\n`;
+  p += `Bei Frustration ("Du wiederholst dich" / "schon gesagt" / "eierst"):\n`;
+  p += `1. "Stimmt, Entschuldigung. Lassen ${S} mich anders fragen."\n`;
   p += `2. Springe zur NAECHSTEN Phase.\n`;
-  p += `3. Stelle die Einstiegsfrage der naechsten Phase.\n`;
-  p += `NIEMALS rechtfertigen. NIEMALS dieselbe Frage nochmal stellen.\n\n`;
+  p += `NIEMALS rechtfertigen. NIEMALS dieselbe Frage nochmal.\n\n`;
 
-  // ─── AKTUELLE PHASE (Initial: Phase 1) ───
-  p += `═══ AKTUELLE PHASE: 1 von 6 — Aufwaermen ═══\n`;
-  p += `DEIN ZIEL JETZT: Herausfinden, wer der letzte Kunde war. Konkret: Beruf, ungefaehres Alter, Branche.\n`;
-  p += `Wenn zwei Kunden kommen: beim ersten bleiben, den zweiten fuer spaeter merken.\n`;
-  p += `Du bist fertig mit Phase 1 wenn: Branche, Groesse/Rolle und ein Detail ueber die Person bekannt sind.\n\n`;
+  // ═══════════════════════════════════════════════════
+  // SCHICHT B: INITIAL PHASE (Phase 0: Radar-Scan)
+  // Wird dynamisch via Orchestrator ersetzt
+  // ═══════════════════════════════════════════════════
+  p += `═══ AKTUELLE PHASE: 0 von 6 — Radar-Scan ═══\n`;
+  p += `DEIN ZIEL JETZT: In 2-3 Fragen herausfinden:\n`;
+  p += `1. Welche 2-3 Hauptprodukte/Dienstleistungen bietet die Firma an?\n`;
+  p += `2. Wie viele aktive Kunden hat die Firma ungefaehr (Handvoll oder Hunderte)?\n`;
+  p += `3. Gibt es etwas im Angebot das der Inhaber AUSBAUEN moechte — und etwas das er WENIGER machen will?\n\n`;
+  p += `EINSTIEGSFRAGE: "Was sind ${Ihre} wichtigsten zwei, drei Angebote oder Dienstleistungen?"\n`;
+  p += `VERTIEFUNG: "Wie viele aktive Kunden ${haben} ${S} ungefaehr — eher eine Handvoll oder eher Hunderte?"\n`;
+  p += `BUSINESS SHIFT: "Gibt es in ${Ihre}m Angebot etwas, das ${S} gezielt ausbauen ${sie ? 'moechten' : 'moechtest'} — und etwas, das ${S} lieber weniger ${sie ? 'machen wuerden' : 'machen wuerdest'}?"\n\n`;
+  p += `Du bist FERTIG mit Phase 0 wenn: Produkte, Kundenanzahl und Wachstumsrichtung bekannt sind.\n`;
+  p += `Danach ZUSAMMENFASSEN und mit Phase 1 weitermachen.\n\n`;
 
   // ─── STIL ───
   p += `═══ STIL ═══\n`;
   p += `${sie ? 'Schweizer Hochdeutsch, Sie-Form' : 'Schweizer Hochdeutsch, Du-Form'}. Kurze Saetze. Keine Marketing-Woerter.\n`;
-  p += `Sprich wie ein Journalist beim Kaffee.\n\n`;
+  p += `Sprich wie ein erfahrener Journalist beim Kaffee — neugierig, respektvoll, auf Augenhoehe.\n\n`;
 
-  // ─── OUTPUT-FORMAT ───
+  // ─── FORMAT ───
   p += `═══ FORMAT JEDER ANTWORT ═══\n`;
-  p += `[Kurze Bestaetigung, max 5 Woerter] + [EINE Frage, max 20 Woerter]. Dann STOPP.\n`;
-  p += `Beispiel: "Verstehe. Was hat ihn konkret dazu gebracht, gerade jetzt bei ${Ihnen} anzufragen?"\n\n`;
+  p += `[Abwechselnde Bestaetigung, max 5 Woerter] + [EINE Frage, max 20 Woerter]. Dann STOPP.\n`;
+  p += `Maximal 250 Zeichen pro Antwort.\n\n`;
 
   // ─── BEGRUESSUNG ───
   p += `═══ ERSTE BEGRUESSUNG ═══\n`;
   p += `Stelle dich als Eusebius vor. Sage dass ${S} gemeinsam herausarbeiten, welche Kundentypen ${ctx?.name || 'die Firma'} hat.\n`;
   p += `Ca. 15-20 Minuten, ganz natuerlich wie ein Gespraech. Mikrofon ist aktiv.\n`;
-  p += `Halte die Begruessung unter 3 Saetzen, dann stelle EINE Frage aus Phase 1.\n`;
+  p += `Halte die Begruessung unter 3 Saetzen, dann stelle die Einstiegsfrage aus Phase 0.\n`;
   p += `Spreche Deutsch.`;
 
-  console.log('[System Prompt – Persona V2]', p.substring(0, 200) + '...');
+  console.log('[System Prompt – Persona V2.2]', p.substring(0, 200) + '...');
   console.log('[Prompt-Laenge]', p.length, 'Zeichen (~' + Math.round(p.length/4) + ' Token)');
   return p;
 }
