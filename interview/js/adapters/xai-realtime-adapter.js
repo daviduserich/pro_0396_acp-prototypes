@@ -68,7 +68,16 @@ class XaiRealtimeAdapter {
           session: {
             voice: this.voice,
             instructions: systemPrompt,
-            turn_detection: { type: 'server_vad' },
+            turn_detection: { 
+              type: 'server_vad',
+              // Wait longer before assuming user is done (default ~500ms)
+              // Higher = more patience, user can pause to think
+              silence_duration_ms: 1200,
+              // Lower threshold = more sensitive to speech (default 0.5)
+              threshold: 0.4,
+              // Pad start of speech detection (catches soft starts)
+              prefix_padding_ms: 500,
+            },
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { model: 'whisper-1' },
