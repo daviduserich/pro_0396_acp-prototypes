@@ -182,11 +182,10 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
   <div class="config-group">
     <label>Engine</label>
     <div class="engine-toggle">
-      <button class="engine-btn active" data-engine="livekit" onclick="setEngine('livekit')">LiveKit/Claude</button>
-      <button class="engine-btn" data-engine="xai" onclick="setEngine('xai')">xAI/Grok</button>
+      <button class="engine-btn" data-engine="livekit" onclick="setEngine('livekit')">LiveKit/Claude</button>
+      <button class="engine-btn active" data-engine="xai" onclick="setEngine('xai')">xAI/Grok</button>
     </div>
   </div>
-  <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Interview starten</button>
 </div>
 
 <!-- MAIN -->
@@ -208,7 +207,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       <div class="info-row"><span class="info-label">Dauer</span><span class="info-value" id="sessionDuration">00:00</span></div>
       <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="sessionStatus"><span class="status-dot"></span> Bereit</span></div>
       <div class="info-row"><span class="info-label">Messages</span><span class="info-value" id="msgCount">0</span></div>
-      <div class="info-row"><span class="info-label">Engine</span><span class="info-value" id="engineLabel">LiveKit/Claude</span></div>
+      <div class="info-row"><span class="info-label">Engine</span><span class="info-value" id="engineLabel">xAI/Grok</span></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-title">📂 Frühere Sessions</div>
@@ -235,8 +234,9 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       <div class="typing-dot"></div>
     </div>
 
-    <!-- Controls -->
+    <!-- Controls — alle Aktions-Buttons auf einer Linie -->
     <div class="controls">
+      <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Interview starten</button>
       <button class="mic-btn" id="micBtn" onclick="toggleMic()" disabled title="Mikrofon aus">🎤</button>
       <div style="flex:1;"></div>
       <button class="ctrl-btn" id="saveBtn" onclick="saveTranscript()" disabled style="background:rgba(34,197,94,0.1);border-color:var(--green);color:var(--green);">📋 Speichern</button>
@@ -262,7 +262,7 @@ let state = {
   clientId: null,
   moduleId: null,
   sessionId: null,
-  engine: 'livekit',
+  engine: 'xai',
   isRecording: false,
   isConnected: false,
   startTime: null,
@@ -338,9 +338,11 @@ async function loadSessions() {
       const date = new Date(s.created_at).toLocaleDateString('de-CH', {day:'2-digit',month:'2-digit'});
       const time = new Date(s.created_at).toLocaleTimeString('de-CH', {hour:'2-digit',minute:'2-digit'});
       const clientName = clientMap[s.client_id] || '?';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      const resumeBtn = (s.status !== 'completed') ? `<button onclick="resumeSession('${s.id}')" style="font-size:10px;padding:2px 6px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">▶</button>` : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;gap:4px;">
         <span>${engineIcon} ${clientName}</span>
         <span style="color:var(--text-muted);">${date} ${time} ${statusIcon}</span>
+        ${resumeBtn}
       </div>`;
     }).join('');
   } catch(e) { console.error('Sessions laden:', e); }
@@ -1103,7 +1105,11 @@ async function pauseSession() {
 
 async function endSession() {
   if (!confirm('Interview wirklich beenden?')) return;
-  addMessage('system', 'Interview beendet. Ergebnisse werden gespeichert...');
+  // Auto-save before ending
+  if (state.sessionId) {
+    addMessage('system', 'Interview beendet. Transkript wird gespeichert...');
+    await saveTranscript();
+  }
   if (state.adapter) await state.adapter.disconnect();
   state.adapter = null;
   state.isConnected = false;
@@ -1114,13 +1120,43 @@ async function endSession() {
   document.getElementById('micBtn').classList.remove('active');
   document.getElementById('pauseBtn').disabled = true;
   document.getElementById('endBtn').disabled = true;
+  // Keep sessionId + allow "Fortsetzen"
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('startBtn').textContent = '▶ Fortsetzen';
   stopAudioViz();
   renderTopics();
 }
 
 async function resumeSession(sessionId) {
-  addMessage('system', `Session ${sessionId.substring(0,8)}... wird fortgesetzt`);
-  // TODO: Load session context and reconnect
+  addMessage('system', `Session ${sessionId.substring(0,8)}... wird geladen...`);
+  try {
+    // Load saved transcript from Supabase
+    const sessions = await sbFetch('interview_sessions', `?id=eq.${sessionId}&select=id,transcript,client_id,module_id,status`);
+    if (!sessions.length) { addMessage('system', '❌ Session nicht gefunden.'); return; }
+    const session = sessions[0];
+    
+    // Restore state
+    state.sessionId = sessionId;
+    if (session.client_id) {
+      state.clientId = session.client_id;
+      document.getElementById('clientSelect').value = session.client_id;
+    }
+    
+    // Replay transcript into chat
+    if (session.transcript && session.transcript.length > 0) {
+      session.transcript.forEach(msg => {
+        if (msg.role !== 'system') addMessage(msg.role, msg.content);
+      });
+      addMessage('system', `📜 ${session.transcript.length} Nachrichten geladen.`);
+    }
+    
+    // Enable "Fortsetzen" button
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startBtn').textContent = '▶ Fortsetzen';
+    checkReady();
+  } catch(e) {
+    addMessage('system', `❌ Laden fehlgeschlagen: ${e.message}`);
+  }
 }
 
 function updateDuration() {
