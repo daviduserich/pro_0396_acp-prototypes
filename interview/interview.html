@@ -540,7 +540,7 @@ async function saveTranscript() {
 }
 
 // ─── Orchestrator: Send transcript to Claude Brain ───
-const ORCHESTRATOR_URL = 'https://n8n-mxs.com/webhook/interview-orchestrate';
+const ORCHESTRATOR_URL = 'https://n8n-mxs.com/webhook/interview-orchestrate-v2';
 
 async function sendToOrchestrator(role, content, flags = []) {
   state._turnIndex = (state._turnIndex || 0) + 1;
@@ -569,9 +569,17 @@ async function sendToOrchestrator(role, content, flags = []) {
     const data = await res.json();
     
     // ─── Inject new instructions into xAI agent (State-Machine Dynamic Prompt) ───
-    if (data.instructions && state.adapter?.updateInstructions) {
-      state.adapter.updateInstructions(data.instructions);
-      console.log('[Orchestrator] 🧠 Dynamic prompt injected (Phase ' + (data.current_phase || '?') + ')');
+    if (state.adapter?.updateInstructions) {
+      if (data.instructions) {
+        // Full prompt replacement (legacy / future controller-LLM)
+        state.adapter.updateInstructions(data.instructions);
+        console.log('[Orchestrator] 🧠 Full prompt replaced (Phase ' + (data.current_phase || '?') + ')');
+      } else if (data.instructions_suffix && state._basePrompt) {
+        // Append state block to base prompt (V2 State-Machine approach)
+        const dynamicPrompt = state._basePrompt + '\n\n' + data.instructions_suffix;
+        state.adapter.updateInstructions(dynamicPrompt);
+        console.log('[Orchestrator] 🧠 State injected (Phase ' + (data.current_phase || '?') + ', ' + dynamicPrompt.length + ' chars)');
+      }
     }
     
     // ─── Update phase indicator in sidebar ───
@@ -685,6 +693,7 @@ async function startInterview() {
       const moduleOpt = document.getElementById('moduleSelect').selectedOptions[0];
       const topics = state.topics.map(t => t.label).join(', ');
       const systemPrompt = await buildSystemPrompt(moduleOpt?.textContent || 'Interview', topics);
+      state._basePrompt = systemPrompt; // Store for orchestrator state-injection
       // xAI token response uses 'xai_token' field
       await state.adapter.connect(tokenData.xai_token, systemPrompt);
       addMessage('system', `✅ Verbunden (xAI Grok – ${tokenData.model || 'grok-3-mini'})`);
