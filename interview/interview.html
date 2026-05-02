@@ -166,7 +166,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.0 — Persona-Engine</span>
+  <span class="version">V2.1 — Persona-Engine</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -507,6 +507,10 @@ function injectCorrection(flags) {
 async function saveTranscript() {
   if (!state.sessionId) { addMessage('system', '❌ Keine aktive Session.'); return; }
   
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '⏳ Speichert...';
+  
   // Collect all messages from DOM
   const msgs = [];
   document.querySelectorAll('#chatMessages .msg').forEach(el => {
@@ -531,11 +535,22 @@ async function saveTranscript() {
     });
     if (res.ok) {
       addMessage('system', `✅ Transkript gespeichert (${msgs.length} Nachrichten)`);
+      saveBtn.textContent = '✅ Gespeichert';
+      saveBtn.style.background = 'rgba(34,197,94,0.25)';
+      setTimeout(() => {
+        saveBtn.textContent = '📋 Speichern';
+        saveBtn.style.background = 'rgba(34,197,94,0.1)';
+        saveBtn.disabled = false;
+      }, 5000);
     } else {
       addMessage('system', `⚠️ Speichern fehlgeschlagen: HTTP ${res.status}`);
+      saveBtn.textContent = '❌ Fehler';
+      setTimeout(() => { saveBtn.textContent = '📋 Speichern'; saveBtn.disabled = false; }, 3000);
     }
   } catch(e) {
     addMessage('system', `❌ Fehler: ${e.message}`);
+    saveBtn.textContent = '📋 Speichern';
+    saveBtn.disabled = false;
   }
 }
 
@@ -637,6 +652,14 @@ function handleAdapterStatus(status) {
     document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Aktiv';
   } else if (status === 'disconnected') {
     state.isConnected = false;
+    document.getElementById('sessionStatus').innerHTML = '<span class="status-dot"></span> Getrennt';
+    // Reset control buttons
+    document.getElementById('micBtn').disabled = true;
+    document.getElementById('pauseBtn').disabled = true;
+    document.getElementById('endBtn').disabled = true;
+    document.getElementById('startBtn').disabled = false;
+    // Keep save button enabled so user can still save after disconnect
+    if (state.durationTimer) { clearInterval(state.durationTimer); state.durationTimer = null; }
   } else if (status === 'error') {
     addMessage('system', '❌ Verbindungsfehler — bitte erneut versuchen.');
   }
