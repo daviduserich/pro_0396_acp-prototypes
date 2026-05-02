@@ -1098,6 +1098,8 @@ async function pauseSession() {
   document.getElementById('micBtn').disabled = true;
   document.getElementById('micBtn').classList.remove('active');
   document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('endBtn').disabled = false;  // Beenden bleibt aktiv
+  document.getElementById('saveBtn').disabled = false;  // Speichern bleibt aktiv
   document.getElementById('startBtn').disabled = false;
   document.getElementById('startBtn').textContent = '▶ Fortsetzen';
   renderTopics();
