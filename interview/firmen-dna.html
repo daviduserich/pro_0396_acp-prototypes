@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ACP Firmen-DNA | Produkte-Portfolio</title>
-<meta name="description" content="Voice-Agent zur Erarbeitung der Angebotsstruktur">
+<title>ACP Produkte & Positionierung</title>
+<meta name="description" content="Voice-Agent zur Erarbeitung der Produkte und Positionierung">
 <meta name="robots" content="noindex, nofollow">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -20,7 +20,7 @@
 html, body { font-family:var(--font); background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
 .app-shell { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
 .header { flex-shrink:0; padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; background:var(--bg-card); z-index:10; }
-.header h1 { font-size:18px; font-weight:600; background:linear-gradient(135deg,var(--accent-light),#c084fc); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.header h1 { font-size:18px; font-weight:600; background:linear-gradient(135deg,var(--accent-light),#c084fc); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
 .header .version { font-size:11px; color:var(--text-muted); background:var(--bg-input); padding:2px 8px; border-radius:4px; }
 .config-bar { flex-shrink:0; padding:12px 24px; border-bottom:1px solid var(--border); background:var(--bg-card); display:flex; flex-wrap:wrap; gap:12px; align-items:center; z-index:10; }
 .config-group { display:flex; align-items:center; gap:6px; }
@@ -86,8 +86,8 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <body>
 <div class="app-shell">
 <div class="header">
-  <h1>🏢 ACP Firmen-DNA</h1>
-  <span class="version">V1.1 — Produkte-Portfolio Agent (Eusebia)</span>
+  <h1>🏢 ACP Produkte & Positionierung</h1>
+  <span class="version">V1.2</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -138,8 +138,8 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     <div class="chat-messages" id="chatMessages">
       <div class="welcome" id="welcomeScreen">
         <div class="welcome-icon">🏢</div>
-        <h2>Firmen-DNA erarbeiten</h2>
-        <p>Eusebia erarbeitet mit dir in 5-8 Minuten dein Produkte-Portfolio und deine Angebotsstruktur — als Grundlage für die Persona-Erarbeitung.</p>
+        <h2>Produkte & Positionierung erarbeiten</h2>
+        <p>Eusebia erarbeitet mit dir in 5-8 Minuten dein Produkte-Portfolio und deine Positionierung — als Grundlage für die Persona-Erarbeitung.</p>
       </div>
     </div>
     <div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
@@ -155,8 +155,9 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 </div>
 </div>
 
-<script type="module">
-import { XaiRealtimeAdapter } from './js/adapters/xai-realtime-adapter.js';
+<script>
+// Adapter wird dynamisch geladen wenn Session startet
+let XaiRealtimeAdapter = null;
 
 // ═══ STATE ═══
 const state = {
@@ -390,6 +391,14 @@ window.startInterview = async function() {
   if (!state.clientId) return;
   addMessage('system', 'Interview wird gestartet... (xAI/Grok | ' + 
     (state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid') + ')');
+  
+  // Dynamisch laden
+  if (!XaiRealtimeAdapter) {
+    try {
+      const mod = await import('./js/adapters/xai-realtime-adapter.js');
+      XaiRealtimeAdapter = mod.XaiRealtimeAdapter;
+    } catch(e) { console.warn('[Adapter] Dynamic import failed:', e); }
+  }
   
   try {
     const token = await getToken();
