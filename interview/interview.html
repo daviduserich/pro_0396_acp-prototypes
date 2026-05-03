@@ -266,8 +266,8 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
         <span id="avatarToggleIcon" style="margin-left:auto; font-size:10px;">▼</span>
       </div>
       <div id="personaTabBar" style="display:flex; gap:4px; padding:4px 8px; font-size:11px;">
-        <button class="persona-tab active" data-idx="0" onclick="switchPersona(0)">Persona 1</button>
-        <button class="persona-tab" id="personaTab2" data-idx="1" onclick="switchPersona(1)" style="display:none;">Persona 2</button>
+        <button class="persona-tab active" data-idx="0" onclick="switchPersona(0)" ondblclick="renamePersona(0)">Persona 1</button>
+        <button class="persona-tab" id="personaTab2" data-idx="1" onclick="switchPersona(1)" ondblclick="renamePersona(1)" style="display:none;">Persona 2</button>
         <button class="persona-tab-add" onclick="addPersona()" title="Neue Persona">+</button>
       </div>
       <div id="avatarCardBody">
@@ -620,7 +620,7 @@ function handleAdapterMessage(role, content, data) {
       displayContent = displayContent.replace(/\[\[PERSONA_NEU\]\]/g, '').trim();
       // Auto-create new persona if not already at max
       if (_personas.length < 3) {
-        addPersona();
+        addPersona(true); // true = agent-triggered, don't notify agent again
         console.log('[Multi-Persona] 🧑 Agent hat neue Persona ausgelöst → Tab', _personas.length);
       }
     }
@@ -1594,18 +1594,53 @@ function switchPersona(idx) {
   syncPopup();
 }
 
-function addPersona() {
+let _personaNames = ['Persona 1']; // Editable persona names
+
+function addPersona(agentTriggered = false) {
   if (_personas.length >= 3) return; // max 3 personas
   _personas.push({});
   const idx = _personas.length - 1;
+  _personaNames.push(`Persona ${idx + 1}`);
+  
   // Show tab 2
   const tab2 = document.getElementById('personaTab2');
   if (tab2 && idx === 1) {
     tab2.style.display = '';
-    tab2.textContent = 'Persona 2';
+    tab2.textContent = _personaNames[idx];
   }
   switchPersona(idx);
-  addMessage('system', `📋 Persona ${idx + 1} erstellt — neuer Steckbrief bereit.`);
+  addMessage('system', `📋 ${_personaNames[idx]} erstellt — neuer Steckbrief bereit. (Klick auf Tab-Name zum Umbenennen)`);
+  
+  // Notify agent if user created manually (not agent-triggered)
+  if (!agentTriggered && state.isConnected && state.adapter && state.adapter.sendText) {
+    const msg = `[System: User hat manuell ${_personaNames[idx]} erstellt. Frage kurz was diese neue Persona ausmacht und beginne mit Block 1.]`;
+    state.adapter.sendText(msg);
+    console.log('[Multi-Persona] 📨 Agent über manuelle Persona-Erstellung informiert');
+  }
+}
+
+function renamePersona(idx) {
+  const current = _personaNames[idx] || `Persona ${idx + 1}`;
+  const newName = prompt('Persona umbenennen:', current);
+  if (!newName || !newName.trim()) return;
+  _personaNames[idx] = newName.trim();
+  // Update tab text
+  const tabs = document.querySelectorAll('.persona-tab');
+  tabs.forEach(t => {
+    if (parseInt(t.dataset.idx) === idx) t.textContent = newName.trim();
+  });
+  syncPopup();
+}
+
+// Auto-name persona when branche field is filled
+function autoNamePersona(idx, data) {
+  if (data.branche && data.branche !== '?' && _personaNames[idx] === `Persona ${idx + 1}`) {
+    _personaNames[idx] = data.branche;
+    const tabs = document.querySelectorAll('.persona-tab');
+    tabs.forEach(t => {
+      if (parseInt(t.dataset.idx) === idx) t.textContent = data.branche;
+    });
+  }
 }
 
 // ─── Popup Window ───
@@ -1782,6 +1817,7 @@ function renderAvatarCard(data) {
     }
   }
   document.getElementById('avatarProgress').textContent = `${filled} / ${Object.keys(AVATAR_FIELDS).length} Felder gefüllt`;
+  autoNamePersona(_activePersonaIdx, pData);
   syncPopup();
 }
 
