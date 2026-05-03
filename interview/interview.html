@@ -614,6 +614,17 @@ function handleAdapterMessage(role, content, data) {
         injectCorrection(flags);
       }
     }
+    
+    // ─── Multi-Persona: Auto-detect [[PERSONA_NEU]] signal from agent ───
+    if (displayContent.includes('[[PERSONA_NEU]]')) {
+      displayContent = displayContent.replace(/\[\[PERSONA_NEU\]\]/g, '').trim();
+      // Auto-create new persona if not already at max
+      if (_personas.length < 3) {
+        addPersona();
+        console.log('[Multi-Persona] 🧑 Agent hat neue Persona ausgelöst → Tab', _personas.length);
+      }
+    }
+    
     state._lastUserMsg = null; // Reset dedup tracker on agent turn
   }
   
@@ -1201,10 +1212,12 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   p += `WICHTIG: Ab Frage 18 stellst du KEINE neuen Fragen mehr. Du fasst zusammen und schliesst ab.\n`;
   p += `Wenn der User nach dem Abschluss noch Themen anspricht → "Das nehme ich auf, aber fuer den Steckbrief haben wir genug."\n\n`;
   
-  p += `MULTI-PERSONA: Wenn der User einen ZWEITEN Kundentyp beschreibt der anders ist:\n`;
+  p += `MULTI-PERSONA: Wenn der User einen ZWEITEN Kundentyp beschreibt der sich klar vom ersten unterscheidet:\n`;
   p += `Sage: "Das klingt nach einer separaten Persona. Sollen wir dafuer einen eigenen Steckbrief machen?"\n`;
-  p += `Wenn ja → beginne bei Block 1, aber NUR fuer die neue Persona.\n`;
-  p += `Wenn nein → integriere es in den bestehenden Steckbrief.\n\n`;
+  p += `Wenn der User JA sagt → schreibe GENAU diesen Tag in deine Antwort: [[PERSONA_NEU]]\n`;
+  p += `Dann: "Gut, starten wir den zweiten Steckbrief." und beginne bei Block 1 fuer die neue Persona.\n`;
+  p += `Wenn nein → integriere es in den bestehenden Steckbrief.\n`;
+  p += `Du erkennst eine neue Persona an: anderer Firmentyp, andere Branche, anderer Entscheider-Typ, oder anderes Angebot.\n\n`;
 
   // ═══ CONVERSATION DESIGN PATTERNS ═══
   p += `═══ GESPRÄCHS-TECHNIKEN ═══\n\n`;
