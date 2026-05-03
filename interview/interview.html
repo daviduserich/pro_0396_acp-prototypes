@@ -1598,6 +1598,26 @@ let _personaNames = ['Persona 1']; // Editable persona names
 
 function addPersona(agentTriggered = false) {
   if (_personas.length >= 3) return; // max 3 personas
+  
+  // Guard: Check if current persona is sufficiently complete (unless agent-triggered)
+  if (!agentTriggered) {
+    const currentData = _personas[_activePersonaIdx] || {};
+    const filledCount = Object.keys(AVATAR_FIELDS).filter(k => {
+      const v = currentData[k];
+      return v && v.trim && v.trim() !== '' && v !== '?';
+    }).length;
+    
+    if (filledCount < 10) {
+      // Not enough fields filled — notify agent to handle it
+      addMessage('system', `⚠️ ${_personaNames[_activePersonaIdx]} hat erst ${filledCount}/16 Felder. Zuerst fertigstellen?`);
+      if (state.isConnected && state.adapter && state.adapter.sendText) {
+        const msg = `[System: User hat auf "Neue Persona" geklickt, aber ${_personaNames[_activePersonaIdx]} hat erst ${filledCount} von 16 Feldern. Sage dem User: "Ich sehe du möchtest eine zweite Persona starten. Lass uns zuerst ${_personaNames[_activePersonaIdx]} fertig machen — wir haben noch ${16 - filledCount} offene Felder. Hattest du gerade einen Impuls? Dann gib ihn mir kurz, ich speichere ihn, und wir machen hier weiter."]`;
+        state.adapter.sendText(msg);
+      }
+      return; // Don't create yet
+    }
+  }
+  
   _personas.push({});
   const idx = _personas.length - 1;
   _personaNames.push(`Persona ${idx + 1}`);
@@ -1609,7 +1629,7 @@ function addPersona(agentTriggered = false) {
     tab2.textContent = _personaNames[idx];
   }
   switchPersona(idx);
-  addMessage('system', `📋 ${_personaNames[idx]} erstellt — neuer Steckbrief bereit. (Klick auf Tab-Name zum Umbenennen)`);
+  addMessage('system', `📋 ${_personaNames[idx]} erstellt — neuer Steckbrief bereit. (Doppelklick auf Tab zum Umbenennen)`);
   
   // Notify agent if user created manually (not agent-triggered)
   if (!agentTriggered && state.isConnected && state.adapter && state.adapter.sendText) {
