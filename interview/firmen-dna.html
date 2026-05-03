@@ -155,9 +155,8 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 </div>
 </div>
 
+<script src="./js/adapters/xai-realtime-adapter.js"></script>
 <script>
-// Adapter wird dynamisch geladen wenn Session startet
-let XaiRealtimeAdapter = null;
 
 // ═══ STATE ═══
 const state = {
@@ -398,19 +397,13 @@ window.startInterview = async function() {
   addMessage('system', 'Interview wird gestartet... (xAI/Grok | ' + 
     (state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid') + ')');
   
-  // Dynamisch laden
-  if (!XaiRealtimeAdapter) {
-    try {
-      const mod = await import('./js/adapters/xai-realtime-adapter.js');
-      XaiRealtimeAdapter = mod.XaiRealtimeAdapter;
-    } catch(e) { console.warn('[Adapter] Dynamic import failed:', e); }
-  }
+  // Adapter ist via script-tag geladen auf window.XaiRealtimeAdapter
   
   try {
     const token = await getToken();
     state._cachedToken = token;
     
-    const adapter = new XaiRealtimeAdapter({
+    const adapter = new window.XaiRealtimeAdapter({
       apiKey: token,
       model: 'grok-3',
       systemPrompt: buildSystemPrompt(),
