@@ -167,8 +167,9 @@ const state = {
 };
 
 // ═══ SUPABASE HELPERS ═══
-const SB_URL = 'https://jsmceqijawxajbpkdcgh.supabase.co';
-const N8N_TOKEN_URL = 'https://acp-n8n.up.railway.app/webhook/interview-token';
+const SB_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4Mzg1OTEsImV4cCI6MjA4NjQxNDU5MX0.U-lKsXf4bkK3oUhQ4vrDy6TelKKO3GlJYH4DaHJu3zo';
+const N8N_TOKEN_URL = 'https://n8n-mxs.com/webhook/interview-token';
 
 async function getToken() {
   const url = new URL(N8N_TOKEN_URL);
@@ -184,7 +185,6 @@ async function getToken() {
 }
 
 async function sbFetch(table, query='') {
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzbWNlcWlqYXd4YWpicGtkY2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0NTUzNTMsImV4cCI6MjA1MDAzMTM1M30.Ej4QMIRhUgSBclAGzCOhW0vf1bP-vTkDDqVTCOvMX80';
   const r = await fetch(`${SB_URL}/rest/v1/${table}${query}`, {
     headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
   });
@@ -194,7 +194,7 @@ async function sbFetch(table, query='') {
 // ═══ INIT ═══
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const clients = await sbFetch('clients', '?select=id,name,slug&order=name');
+    const clients = await sbFetch('clients', '?select=id,name,slug&active=eq.true&order=name');
     const sel = document.getElementById('clientSelect');
     sel.innerHTML = '<option value="">— Kunde wählen —</option>';
     clients.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.name || c.slug}</option>`; });
@@ -460,7 +460,6 @@ window.stopInterview = async function() {
 
 async function saveDnaToSupabase() {
   if (!state.clientId) { console.error('[Save] No clientId'); return false; }
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzbWNlcWlqYXd4YWpicGtkY2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0NTUzNTMsImV4cCI6MjA1MDAzMTM1M30.Ej4QMIRhUgSBclAGzCOhW0vf1bP-vTkDDqVTCOvMX80';
   try {
     // First: get current voice_config
     const getR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}&select=voice_config`, {
