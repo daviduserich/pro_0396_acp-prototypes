@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Firmen-DNA</h1>
-  <span class="version">V1.0 — Produkte-Portfolio Agent (Eusebia)</span>
+  <span class="version">V1.1 — Produkte-Portfolio Agent (Eusebia)</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -433,7 +433,7 @@ window.startInterview = async function() {
   }
 };
 
-window.stopInterview = function() {
+window.stopInterview = async function() {
   if (state.adapter && state.adapter.disconnect) state.adapter.disconnect();
   state.isConnected = false;
   state.adapter = null;
@@ -444,12 +444,52 @@ window.stopInterview = function() {
   document.getElementById('textSendBtn').disabled = true;
   addMessage('system', '⏹ Interview beendet.');
   
-  // Log final DNA data
-  if (Object.keys(state.dnaData).length > 0) {
-    console.log('[Firmen-DNA] Final:', JSON.stringify(state.dnaData, null, 2));
-    addMessage('system', '📋 Firmen-DNA gespeichert: ' + Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?').length + '/8 Felder');
+  // Save to Supabase
+  const filledKeys = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?');
+  if (filledKeys.length > 0 && state.clientId) {
+    addMessage('system', `💾 Speichere Firmen-DNA (${filledKeys.length}/8 Felder)...`);
+    const ok = await saveDnaToSupabase();
+    if (ok) {
+      addMessage('system', '✅ Firmen-DNA erfolgreich in Supabase gespeichert!');
+    } else {
+      addMessage('system', '⚠️ Speichern fehlgeschlagen — JSON in Konsole gesichert.');
+    }
   }
+  console.log('[Firmen-DNA] Final:', JSON.stringify(state.dnaData, null, 2));
 };
+
+async function saveDnaToSupabase() {
+  if (!state.clientId) { console.error('[Save] No clientId'); return false; }
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzbWNlcWlqYXd4YWpicGtkY2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0NTUzNTMsImV4cCI6MjA1MDAzMTM1M30.Ej4QMIRhUgSBclAGzCOhW0vf1bP-vTkDDqVTCOvMX80';
+  try {
+    // First: get current voice_config
+    const getR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}&select=voice_config`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    const rows = await getR.json();
+    const currentConfig = (rows[0] && rows[0].voice_config) || {};
+    
+    // Merge offering_structure into voice_config
+    const updated = { ...currentConfig, offering_structure: { ...state.dnaData, _updated: new Date().toISOString() } };
+    
+    // PATCH
+    const patchR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ voice_config: updated })
+    });
+    if (patchR.ok) {
+      console.log('[Save] ✅ Firmen-DNA gespeichert in voice_config.offering_structure');
+      return true;
+    } else {
+      console.error('[Save] ❌ PATCH failed:', patchR.status, await patchR.text());
+      return false;
+    }
+  } catch(e) { console.error('[Save] ❌ Error:', e); return false; }
+}
 
 function startTimer() {
   setInterval(() => {
