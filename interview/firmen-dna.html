@@ -173,13 +173,19 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const N8N_TOKEN_URL = 'https://n8n-mxs.com/webhook/interview-token';
 
 async function getToken() {
-  const url = new URL(N8N_TOKEN_URL);
-  url.searchParams.set('client_id', state.clientId);
-  url.searchParams.set('module', 'firmen-dna');
-  url.searchParams.set('engine', 'xai');
-  const r = await fetch(url);
+  const r = await fetch(N8N_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: state.clientId,
+      module_id: 'firmen-dna',
+      engine_type: 'xai',
+    })
+  });
   if (!r.ok) throw new Error(`Token HTTP ${r.status}`);
   const d = await r.json();
+  if (d.xai_api_key) return d.xai_api_key;
+  if (d.xai_token) return d.xai_token;
   if (d.token) return d.token;
   if (d.api_key) return d.api_key;
   throw new Error('No token in response');
