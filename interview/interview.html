@@ -1142,9 +1142,10 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   p += `11. TEXT-KORREKTUR: Wenn eine User-Nachricht mit [Getippte Korrektur/Ergaenzung] beginnt, hat der User GETIPPT statt gesprochen.\n`;
   p += `   Das ist eine KORREKTUR oder ERGAENZUNG — uebernimm die exakte Schreibweise und beziehe dich darauf.\n`;
   p += `   Wiederhole NICHT was die Spracherkennung falsch verstanden hat.\n`;
-  p += `12. AVATAR-KORREKTUR: Wenn eine Nachricht mit [Avatar-Korrektur: Feldname] beginnt, korrigiert der User ein Feld im Steckbrief.\n`;
-  p += `   Sage kurz: \"Korrigiert, notiert.\" und mache mit der naechsten offenen Frage weiter.\n`;
-  p += `   Verliere NICHT den Fokus. Diskutiere NICHT ueber den Steckbrief. Einfach korrigieren und weiter.\n\n`;
+  p += `12. AVATAR-KORREKTUR: Wenn eine Nachricht mit [Avatar-Korrektur: Feldname] beginnt:\n`;
+  p += `   Der User hat ein Feld im Steckbrief angeklickt das nicht stimmt.\n`;
+  p += `   Frage kurz: \"Was stimmt beim [Feldname] nicht?\" → Hoere zu → Sage: \"Korrigiert.\"\n`;
+  p += `   Dann sofort zurueck zum naechsten offenen Feld. MAX 2 Saetze fuer die Korrektur.\n\n`;
 
   // ═══ WUNSCH-MODUS ═══
   p += `═══ WUNSCH-MODUS ═══\n`;
@@ -1573,8 +1574,9 @@ const AVATAR_LABELS = {
 };
 
 /**
- * Avatar-Korrektur: User clicks a filled field → text input pre-filled with correction context.
- * User types what the field SHOULD say, sends it, and the LLM gets the context.
+ * Avatar-Korrektur: User clicks a filled field → sends correction trigger to agent.
+ * Agent asks "Was stimmt hier nicht?" → User explains via voice or text.
+ * Much more natural than pre-filling text.
  */
 function correctAvatarField(fieldKey) {
   if (!state.isConnected) return;
@@ -1585,17 +1587,26 @@ function correctAvatarField(fieldKey) {
   const currentValue = _avatarData[fieldKey] || '';
   const label = AVATAR_LABELS[fieldKey] || fieldKey;
   
-  const input = document.getElementById('textInput');
-  input.value = `[Avatar-Korrektur: ${label}] Aktuell steht: "${currentValue}" → Richtig ist: `;
-  input.focus();
-  // Move cursor to end
-  input.setSelectionRange(input.value.length, input.value.length);
+  // Build correction message and send directly to LLM
+  const correctionMsg = `[Avatar-Korrektur: ${label}] Im Steckbrief steht: "${currentValue}" — das stimmt so nicht. Frag mich was richtig ist.`;
   
-  // Visual feedback
+  // Show in chat
+  handleAdapterMessage('user', `✏️ Korrektur: ${label} — "${currentValue}" stimmt nicht.`);
+  
+  // Send to LLM
+  if (state.adapter && state.adapter.sendText) {
+    state.adapter.sendText(correctionMsg);
+  }
+  
+  // Visual feedback — highlight the field being corrected
   el.style.borderLeftColor = 'var(--accent-light)';
-  setTimeout(() => { el.style.borderLeftColor = ''; }, 2000);
+  el.style.background = 'rgba(255,255,255,0.08)';
+  setTimeout(() => { 
+    el.style.borderLeftColor = ''; 
+    el.style.background = '';
+  }, 5000);
   
-  console.log(`[Avatar] ✏️ Korrektur gestartet: ${label} (aktuell: ${currentValue})`);
+  console.log(`[Avatar] ✏️ Korrektur-Trigger gesendet: ${label} (aktuell: ${currentValue})`);
 }
 
 function renderAvatarCard(data) {
