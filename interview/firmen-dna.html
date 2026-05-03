@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Firmen-DNA | Produkte-Portfolio</title>
+<meta name="description" content="Voice-Agent zur Erarbeitung der Angebotsstruktur">
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f; --bg-card: #12121a; --bg-input: #1a1a26; --bg-hover: #1e1e2e;
+  --accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.15); --accent-light: #a78bfa;
+  --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  --text: #e2e8f0; --text-dim: #94a3b8; --text-muted: #64748b;
+  --border: #1e293b; --radius: 12px; --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4); --font: 'Inter', -apple-system, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { font-family:var(--font); background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+.app-shell { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+.header { flex-shrink:0; padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; background:var(--bg-card); z-index:10; }
+.header h1 { font-size:18px; font-weight:600; background:linear-gradient(135deg,var(--accent-light),#c084fc); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.header .version { font-size:11px; color:var(--text-muted); background:var(--bg-input); padding:2px 8px; border-radius:4px; }
+.config-bar { flex-shrink:0; padding:12px 24px; border-bottom:1px solid var(--border); background:var(--bg-card); display:flex; flex-wrap:wrap; gap:12px; align-items:center; z-index:10; }
+.config-group { display:flex; align-items:center; gap:6px; }
+.config-group label { font-size:12px; color:var(--text-muted); font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+.config-group select { background:var(--bg-input); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; font-size:13px; font-family:var(--font); cursor:pointer; min-width:160px; }
+.config-group select:focus { outline:none; border-color:var(--accent); }
+.mode-toggle { display:flex; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; }
+.mode-btn { padding:6px 12px; font-size:11px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-muted); font-family:var(--font); transition:all 0.2s; white-space:nowrap; }
+.mode-btn.active { background:var(--accent); color:#fff; }
+.mode-btn:hover:not(.active) { background:var(--bg-hover); color:var(--text); }
+.main { flex:1; display:grid; grid-template-columns:280px 1fr; overflow:hidden; }
+.sidebar { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border-right:1px solid var(--border); min-width:0; }
+.sidebar-section { background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+.sidebar-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+.chat-area { display:flex; flex-direction:column; overflow:hidden; border-left:1px solid var(--border); }
+.chat-messages { flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:12px; }
+.chat-messages::-webkit-scrollbar { width:4px; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.msg { max-width:80%; padding:10px 14px; border-radius:var(--radius); font-size:14px; line-height:1.5; animation:fadeIn 0.3s ease; }
+.msg.assistant { align-self:flex-start; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-left:3px solid var(--accent); }
+.msg.user { align-self:flex-end; background:var(--bg-input); border:1px solid var(--border); }
+.msg.system { align-self:center; background:transparent; color:var(--text-muted); font-size:12px; font-style:italic; }
+.msg .role-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+.msg.assistant .role-label { color:var(--accent-light); }
+.msg.user .role-label { color:var(--text-dim); }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.typing-indicator { display:none; align-self:flex-start; padding:10px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); }
+.typing-indicator.visible { display:flex; gap:4px; align-items:center; }
+.typing-dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); animation:typingBounce 1.4s infinite; }
+.typing-dot:nth-child(2) { animation-delay:0.2s; }
+.typing-dot:nth-child(3) { animation-delay:0.4s; }
+@keyframes typingBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-6px); } }
+.controls { padding:12px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:12px; }
+.ctrl-btn { padding:8px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-input); color:var(--text); cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+.ctrl-btn:hover { border-color:var(--accent); color:var(--accent-light); }
+.ctrl-btn.danger { border-color:var(--red); color:var(--red); }
+.ctrl-btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ctrl-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.text-input-bar { padding:8px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:10px; }
+.text-input-bar input { flex:1; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; color:var(--text); font-size:14px; font-family:var(--font); outline:none; }
+.text-input-bar input:focus { border-color:var(--accent); }
+.text-input-bar input::placeholder { color:var(--text-muted); }
+.text-input-bar button { padding:10px 16px; border-radius:var(--radius-sm); border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; }
+.text-input-bar button:disabled { opacity:0.4; cursor:not-allowed; }
+.dna-field { font-size:12px; color:var(--text-dim); padding:4px 0 4px 4px; line-height:1.4; border-left:2px solid var(--border); margin-left:4px; padding-left:8px; transition:all 0.3s; margin-bottom:2px; }
+.dna-field.filled { color:var(--text); border-left-color:var(--green); cursor:pointer; }
+.dna-field.filled:hover { background:rgba(255,255,255,0.05); border-left-color:var(--accent-light); border-radius:0 4px 4px 0; }
+.dna-field .af-icon { font-size:11px; margin-right:2px; }
+.dna-field .af-value { color:var(--text); font-weight:500; }
+.info-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; }
+.info-label { color:var(--text-muted); }
+.info-value { font-weight:500; }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+.status-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+.welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; gap:16px; }
+.welcome-icon { font-size:64px; opacity:0.3; }
+.welcome h2 { font-size:22px; font-weight:600; }
+.welcome p { color:var(--text-dim); max-width:400px; line-height:1.6; font-size:14px; }
+@media (max-width: 768px) { .main { grid-template-columns:1fr; } .sidebar { display:none; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
+</head>
+<body>
+<div class="app-shell">
+<div class="header">
+  <h1>🏢 ACP Firmen-DNA</h1>
+  <span class="version">V1.0 — Produkte-Portfolio Agent (Eusebia)</span>
+</div>
+<div class="config-bar">
+  <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
+  <div class="config-group"><label>Modus</label>
+    <div class="mode-toggle">
+      <button class="mode-btn" data-mode="voice" onclick="setMode('voice')">🔊 Voice</button>
+      <button class="mode-btn active" data-mode="hybrid" onclick="setMode('hybrid')">⌨️ Hybrid</button>
+      <button class="mode-btn" data-mode="read" onclick="setMode('read')">📖 Lesen</button>
+    </div>
+  </div>
+  <div class="config-group"><label id="engineLabel">xAI/Grok</label></div>
+  <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Starten</button>
+  <button class="ctrl-btn danger" id="stopBtn" onclick="stopInterview()" style="display:none;">⏹ Stopp</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <!-- DNA STECKBRIEF -->
+    <div class="sidebar-section">
+      <div class="sidebar-title" style="cursor:pointer;" onclick="toggleDnaCard()">
+        🏢 Angebots-Steckbrief <span style="margin-left:auto;font-size:10px;" id="dnaToggleIcon">▼</span>
+      </div>
+      <div id="dnaCardBody">
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin-bottom:4px;text-transform:uppercase;">A. Kerngeschäft</div>
+        <div class="dna-field" id="df-hauptangebot" onclick="correctField('hauptangebot')"><span class="af-icon">⏳</span> Hauptangebot</div>
+        <div class="dna-field" id="df-umsatzstaerkstes" onclick="correctField('umsatzstaerkstes')"><span class="af-icon">⏳</span> Umsatzstärkstes</div>
+        <div class="dna-field" id="df-zielmarkt" onclick="correctField('zielmarkt')"><span class="af-icon">⏳</span> Zielmarkt</div>
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">B. Positionierung</div>
+        <div class="dna-field" id="df-preissegment" onclick="correctField('preissegment')"><span class="af-icon">⏳</span> Preissegment</div>
+        <div class="dna-field" id="df-usp" onclick="correctField('usp')"><span class="af-icon">⏳</span> USP</div>
+        <div class="dna-field" id="df-auftragswert" onclick="correctField('auftragswert')"><span class="af-icon">⏳</span> Auftragswert</div>
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">C. Strategie</div>
+        <div class="dna-field" id="df-ausbauen" onclick="correctField('ausbauen')"><span class="af-icon">⏳</span> Ausbauen/Verändern</div>
+        <div class="dna-field" id="df-nicht_mehr" onclick="correctField('nicht_mehr')"><span class="af-icon">⏳</span> Was NICHT mehr</div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;" id="dnaProgress">0 / 8 Felder gefüllt</div>
+    </div>
+    <!-- SESSION INFO -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">📊 Session</div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="statusText"><span class="status-dot"></span> Bereit</span></div>
+      <div class="info-row"><span class="info-label">Nachrichten</span><span class="info-value" id="msgCount">0</span></div>
+      <div class="info-row"><span class="info-label">Dauer</span><span class="info-value" id="duration">00:00</span></div>
+    </div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">🏢</div>
+        <h2>Firmen-DNA erarbeiten</h2>
+        <p>Eusebia erarbeitet mit dir in 5-8 Minuten dein Produkte-Portfolio und deine Angebotsstruktur — als Grundlage für die Persona-Erarbeitung.</p>
+      </div>
+    </div>
+    <div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+    <div class="controls">
+      <button class="ctrl-btn" id="micBtn" disabled title="Mikrofon">🎙️</button>
+      <span style="flex:1;font-size:12px;color:var(--text-muted);" id="micStatus">Nicht verbunden</span>
+    </div>
+    <div class="text-input-bar" id="textInputBar">
+      <input type="text" id="textInput" placeholder="Nachricht tippen..." disabled>
+      <button id="textSendBtn" onclick="sendTextInput()" disabled>Senden</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script type="module">
+import { XaiRealtimeAdapter } from './js/adapters/xai-realtime-adapter.js';
+
+// ═══ STATE ═══
+const state = {
+  clientId: '', engine: 'xai', interactionMode: 'hybrid', ttsEnabled: false,
+  isConnected: false, adapter: null, sessionId: null,
+  messageCount: 0, startTime: null, _lastUserMsg: null,
+  dnaData: {}
+};
+
+// ═══ SUPABASE HELPERS ═══
+const SB_URL = 'https://jsmceqijawxajbpkdcgh.supabase.co';
+const N8N_TOKEN_URL = 'https://acp-n8n.up.railway.app/webhook/interview-token';
+
+async function getToken() {
+  const url = new URL(N8N_TOKEN_URL);
+  url.searchParams.set('client_id', state.clientId);
+  url.searchParams.set('module', 'firmen-dna');
+  url.searchParams.set('engine', 'xai');
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Token HTTP ${r.status}`);
+  const d = await r.json();
+  if (d.token) return d.token;
+  if (d.api_key) return d.api_key;
+  throw new Error('No token in response');
+}
+
+async function sbFetch(table, query='') {
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzbWNlcWlqYXd4YWpicGtkY2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0NTUzNTMsImV4cCI6MjA1MDAzMTM1M30.Ej4QMIRhUgSBclAGzCOhW0vf1bP-vTkDDqVTCOvMX80';
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${query}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+  });
+  return r.json();
+}
+
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const clients = await sbFetch('clients', '?select=id,name,slug&order=name');
+    const sel = document.getElementById('clientSelect');
+    sel.innerHTML = '<option value="">— Kunde wählen —</option>';
+    clients.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.name || c.slug}</option>`; });
+    sel.onchange = () => { state.clientId = sel.value; document.getElementById('startBtn').disabled = !state.clientId; };
+  } catch(e) { console.error('Clients laden:', e); }
+  
+  document.getElementById('textInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextInput(); }
+  });
+});
+
+// ═══ DNA FIELDS ═══
+const DNA_FIELDS = {
+  hauptangebot: 'df-hauptangebot', umsatzstaerkstes: 'df-umsatzstaerkstes',
+  zielmarkt: 'df-zielmarkt', preissegment: 'df-preissegment',
+  usp: 'df-usp', auftragswert: 'df-auftragswert',
+  ausbauen: 'df-ausbauen', nicht_mehr: 'df-nicht_mehr'
+};
+const DNA_LABELS = {
+  hauptangebot:'Hauptangebot', umsatzstaerkstes:'Umsatzstärkstes Angebot',
+  zielmarkt:'Zielmarkt', preissegment:'Preissegment',
+  usp:'USP/Alleinstellung', auftragswert:'Typischer Auftragswert',
+  ausbauen:'Ausbauen/Verändern', nicht_mehr:'Was NICHT mehr'
+};
+
+// ═══ CHAT ═══
+function addMessage(role, content) {
+  const w = document.getElementById('welcomeScreen');
+  if (w) w.style.display = 'none';
+  const container = document.getElementById('chatMessages');
+  const msg = document.createElement('div');
+  msg.className = `msg ${role}`;
+  const label = role === 'assistant' ? '🤖 Eusebia' : role === 'user' ? '👤 Du' : '📌 System';
+  msg.innerHTML = `<div class="role-label">${label}</div>${escapeHtml(content)}`;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+  state.messageCount++;
+  document.getElementById('msgCount').textContent = state.messageCount;
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function showTyping(s) { document.getElementById('typingIndicator').classList.toggle('visible', s); }
+
+// ═══ MODE ═══
+window.setMode = function(mode) {
+  state.interactionMode = mode;
+  state.ttsEnabled = (mode === 'voice');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (state.adapter && state.adapter.setAudioPlaybackEnabled) state.adapter.setAudioPlaybackEnabled(mode === 'voice');
+  if (state.isConnected) {
+    const ml = mode === 'voice' ? '🔊 Voice' : mode === 'read' ? '📖 Lesen' : '⌨️ Hybrid';
+    addMessage('system', `Umgestellt: ${ml}`);
+  }
+};
+
+// ═══ TEXT INPUT ═══
+window.sendTextInput = function() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text || !state.isConnected) return;
+  handleAdapterMessage('user', text);
+  if (state.adapter && state.adapter.sendText) {
+    state.adapter.sendText(state.interactionMode === 'voice' ? `[Getippte Ergänzung]: ${text}` : text);
+  }
+  input.value = '';
+  input.focus();
+};
+
+// ═══ ADAPTER CALLBACKS ═══
+function handleAdapterMessage(role, content) {
+  showTyping(false);
+  let displayContent = content;
+  
+  if (role === 'user') {
+    const trimmed = content.trim();
+    if (!trimmed || trimmed === state._lastUserMsg) return;
+    if (state._lastUserMsg && trimmed.startsWith(state._lastUserMsg)) {
+      const msgs = document.querySelectorAll('#chatMessages .msg.user');
+      if (msgs.length > 0) { const last = msgs[msgs.length-1]; last.remove(); state.messageCount--; }
+    } else if (state._lastUserMsg && state._lastUserMsg.startsWith(trimmed)) return;
+    state._lastUserMsg = trimmed;
+  }
+  
+  if (role === 'assistant') {
+    state._lastUserMsg = null;
+    _agentTurnCount++;
+    if (_agentTurnCount % 3 === 0) maybeUpdateDnaCard();
+  }
+  
+  addMessage(role, displayContent);
+}
+
+// ═══ DNA CARD ═══
+let _dnaCardVisible = true;
+let _agentTurnCount = 0;
+
+window.toggleDnaCard = function() {
+  _dnaCardVisible = !_dnaCardVisible;
+  document.getElementById('dnaCardBody').style.display = _dnaCardVisible ? 'block' : 'none';
+  document.getElementById('dnaToggleIcon').textContent = _dnaCardVisible ? '▼' : '▶';
+};
+
+function renderDnaCard(data) {
+  state.dnaData = { ...state.dnaData, ...data };
+  let filled = 0;
+  for (const [key, domId] of Object.entries(DNA_FIELDS)) {
+    const el = document.getElementById(domId);
+    if (!el) continue;
+    const val = state.dnaData[key];
+    if (val && val.trim && val.trim() !== '' && val !== '?') {
+      el.innerHTML = `<span class="af-icon">✅</span> <span class="af-value">${escapeHtml(val)}</span>`;
+      el.classList.add('filled');
+      filled++;
+    }
+  }
+  document.getElementById('dnaProgress').textContent = `${filled} / 8 Felder gefüllt`;
+}
+
+window.correctField = function(fieldKey) {
+  if (!state.isConnected) return;
+  const el = document.getElementById(DNA_FIELDS[fieldKey]);
+  if (!el || !el.classList.contains('filled')) return;
+  const val = state.dnaData[fieldKey] || '';
+  const label = DNA_LABELS[fieldKey] || fieldKey;
+  const msg = `[KORREKTUR-TRIGGER] Der User möchte das Feld "${label}" korrigieren. Aktueller Wert: "${val}". Frage: "Was stimmt beim ${label} nicht?"`;
+  if (state.adapter && state.adapter.sendText) state.adapter.sendText(msg);
+  addMessage('system', `✏️ Korrektur: ${label}`);
+  el.style.borderLeftColor = 'var(--yellow)';
+  el.style.background = 'rgba(234,179,8,0.1)';
+  setTimeout(() => { el.style.borderLeftColor = ''; el.style.background = ''; }, 5000);
+};
+
+async function maybeUpdateDnaCard() {
+  try {
+    const msgs = document.querySelectorAll('#chatMessages .msg');
+    let transcript = '';
+    msgs.forEach(m => { transcript += m.textContent + '\n'; });
+    if (transcript.length < 100) return;
+    
+    const extractPrompt = `Analysiere dieses Gespraech und extrahiere die Firmen-DNA. Antworte NUR mit einem JSON-Objekt:
+{"hauptangebot":"...","umsatzstaerkstes":"...","zielmarkt":"...","preissegment":"...","usp":"...","auftragswert":"...","ausbauen":"...","nicht_mehr":"..."}
+Felder die nicht besprochen wurden: "?" setzen. Keine Erklaerungen, NUR JSON.
+
+GESPRAECH:
+${transcript.substring(transcript.length - 4000)}`;
+
+    const token = state._cachedToken;
+    if (!token) return;
+    
+    const r = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'grok-3-mini', messages: [{ role: 'user', content: extractPrompt }], temperature: 0.1 })
+    });
+    const d = await r.json();
+    const raw = d.choices?.[0]?.message?.content || '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) renderDnaCard(JSON.parse(jsonMatch[0]));
+  } catch(e) { console.error('[DNA Extract]', e); }
+}
+
+// ═══ SYSTEM PROMPT ═══
+function buildSystemPrompt() {
+  let p = `Du bist Eusebia, eine neugierige und strukturierte Journalistin.\n`;
+  p += `Deine Aufgabe: In 5-8 Minuten die Angebotsstruktur und das Produkte-Portfolio des Kunden erarbeiten.\n\n`;
+  p += `WICHTIGE REGELN:\n`;
+  p += `1. Du sprichst IMMER Deutsch (Schweizer Stil, kein Hochdeutsch-Pathos).\n`;
+  p += `2. Du fragst EINE Frage auf einmal. Kurz, direkt, konkret.\n`;
+  p += `3. Du bist neugierig aber effizient — kein Smalltalk.\n`;
+  p += `4. Du bestaetigst Antworten kurz (variiere: "Spannend", "Okay", "Alles klar", "Verstanden") und stellst die naechste Frage.\n`;
+  p += `5. VERBOTENE WOERTER: "genau", "absolut", "auf jeden Fall", "hervorragend", "grossartig", "wunderbar".\n\n`;
+  p += `ABLAUF (3 Bloecke, max 12 Fragen total):\n\n`;
+  p += `BLOCK 1 — Kerngeschaeft (3-4 Fragen)\n`;
+  p += `Was sind eure Hauptprodukte oder Dienstleistungen?\n`;
+  p += `Womit verdient ihr am meisten Geld?\n`;
+  p += `Wer sind eure Kunden — eher Firmen (B2B) oder Endkunden (B2C) oder beides?\n\n`;
+  p += `BLOCK 2 — Positionierung (3-4 Fragen)\n`;
+  p += `Seid ihr eher im Premium-, Mittel- oder Budget-Segment?\n`;
+  p += `Was unterscheidet euch von euren Mitbewerbern? Was ist euer USP?\n`;
+  p += `Was ist ein typischer Auftragswert bei euch?\n\n`;
+  p += `BLOCK 3 — Strategie & Richtung (2-3 Fragen)\n`;
+  p += `Gibt es etwas das ihr ausbauen oder veraendern moechtet? (Beispiel: "mehr Waermepumpen, weniger Oelheizungen")\n`;
+  p += `Gibt es Dienstleistungen oder Produkte die ihr bewusst NICHT mehr anbieten wollt?\n\n`;
+  p += `ABSCHLUSS: Fasse die 8 Felder zusammen. Frage: "Stimmt das so?"\n`;
+  p += `Nach Bestaetigung: "Super, damit haben wir ein klares Bild eurer Angebotsstruktur."\n\n`;
+  p += `KORREKTUR-TRIGGER: Wenn eine Nachricht mit [KORREKTUR-TRIGGER] beginnt, frage direkt: "Was stimmt hier nicht?" Korrigiere, sage "Korrigiert" und mach weiter.\n`;
+  p += `Ab Frage 12: KEINE neuen Fragen. Zusammenfassen und abschliessen.\n`;
+  return p;
+}
+
+// ═══ START / STOP ═══
+window.startInterview = async function() {
+  if (!state.clientId) return;
+  addMessage('system', 'Interview wird gestartet... (xAI/Grok | ' + 
+    (state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid') + ')');
+  
+  try {
+    const token = await getToken();
+    state._cachedToken = token;
+    
+    const adapter = new XaiRealtimeAdapter({
+      apiKey: token,
+      model: 'grok-3',
+      systemPrompt: buildSystemPrompt(),
+      onMessage: (role, content, data) => handleAdapterMessage(role, content, data),
+      onStatusChange: (status) => {
+        if (status === 'connected') {
+          state.isConnected = true;
+          state.startTime = Date.now();
+          document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Aktiv';
+          document.getElementById('startBtn').style.display = 'none';
+          document.getElementById('stopBtn').style.display = '';
+          document.getElementById('textInput').disabled = false;
+          document.getElementById('textSendBtn').disabled = false;
+          startTimer();
+        }
+      },
+      onError: (err) => { addMessage('system', '⚠️ Fehler: ' + err); }
+    });
+    
+    state.adapter = adapter;
+    await adapter.connect();
+  } catch(e) {
+    addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
+    state.isConnected = true;
+    state.startTime = Date.now();
+    document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Demo';
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = '';
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textSendBtn').disabled = false;
+    startTimer();
+    
+    const greeting = 'Hallo! Hier ist Eusebia. Schön, dass du dir die Zeit nimmst. Wir erarbeiten heute dein Produkte-Portfolio — also was ihr anbietet, womit ihr Geld verdient und wohin die Reise gehen soll. Bereit?';
+    setTimeout(() => addMessage('assistant', greeting), 500);
+  }
+};
+
+window.stopInterview = function() {
+  if (state.adapter && state.adapter.disconnect) state.adapter.disconnect();
+  state.isConnected = false;
+  state.adapter = null;
+  document.getElementById('statusText').innerHTML = '<span class="status-dot"></span> Gestoppt';
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('textInput').disabled = true;
+  document.getElementById('textSendBtn').disabled = true;
+  addMessage('system', '⏹ Interview beendet.');
+  
+  // Log final DNA data
+  if (Object.keys(state.dnaData).length > 0) {
+    console.log('[Firmen-DNA] Final:', JSON.stringify(state.dnaData, null, 2));
+    addMessage('system', '📋 Firmen-DNA gespeichert: ' + Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?').length + '/8 Felder');
+  }
+};
+
+function startTimer() {
+  setInterval(() => {
+    if (!state.startTime) return;
+    const s = Math.floor((Date.now() - state.startTime) / 1000);
+    document.getElementById('duration').textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  }, 1000);
+}
+</script>
+</body>
+</html>
