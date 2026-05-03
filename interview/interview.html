@@ -400,10 +400,19 @@ function setMode(mode) {
   const textBar = document.getElementById('textInputBar');
   textBar.style.display = (mode === 'hybrid') ? 'flex' : 'none';
   
-  // In hybrid mode, enable text input if session is active
+  // Enable/disable text input based on mode + session state
   if (mode === 'hybrid' && state.isConnected) {
     document.getElementById('textInput').disabled = false;
     document.getElementById('textSendBtn').disabled = false;
+  } else {
+    document.getElementById('textInput').disabled = true;
+    document.getElementById('textSendBtn').disabled = true;
+  }
+  
+  // Show feedback if session is active
+  if (state.isConnected) {
+    const modeLabel = mode === 'voice' ? '🔊 Voice-Modus' : mode === 'read' ? '📖 Lese-Modus' : '⌨️ Hybrid-Modus';
+    addMessage('system', `Umgestellt: ${modeLabel}`);
   }
   
   console.log(`[Mode] ${mode} | TTS: ${state.ttsEnabled}`);
