@@ -190,7 +190,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.7 — Persona-Engine (Multimodal + Avatar-Card)</span>
+  <span class="version">V2.7.2 — Persona-Engine (Text-Fix + Avatar-Card)</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -310,7 +310,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     </div>
 
     <!-- Text Input Bar -->
-    <div class="text-input-bar" id="textInputBar" style="display:none;">
+    <div class="text-input-bar" id="textInputBar" style="display:flex;">
       <input type="text" id="textInput" placeholder="Antwort eintippen... (Enter zum Senden)" disabled>
       <button id="textSendBtn" onclick="sendTextInput()" disabled>Senden</button>
     </div>
@@ -448,17 +448,14 @@ function setMode(mode) {
   state.ttsEnabled = (mode === 'voice');
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   
-  // Show/hide text input bar
+  // Text-Input ist IMMER sichtbar — User soll immer tippen können
   const textBar = document.getElementById('textInputBar');
-  textBar.style.display = (mode === 'hybrid') ? 'flex' : 'none';
+  textBar.style.display = 'flex';
   
-  // Enable/disable text input based on mode + session state
-  if (mode === 'hybrid' && state.isConnected) {
+  // Enable text input whenever connected (all modes)
+  if (state.isConnected) {
     document.getElementById('textInput').disabled = false;
     document.getElementById('textSendBtn').disabled = false;
-  } else {
-    document.getElementById('textInput').disabled = true;
-    document.getElementById('textSendBtn').disabled = true;
   }
   
   // TTS gating: tell adapter to mute/unmute audio playback
@@ -468,7 +465,7 @@ function setMode(mode) {
   
   // Show feedback if session is active
   if (state.isConnected) {
-    const modeLabel = mode === 'voice' ? '🔊 Voice-Modus' : mode === 'read' ? '📖 Lese-Modus' : '⌨️ Hybrid-Modus';
+    const modeLabel = mode === 'voice' ? '🔊 Voice-Modus (Tippen möglich)' : mode === 'read' ? '📖 Lese-Modus (nur Text)' : '⌨️ Hybrid-Modus (Sprache + Text)';
     addMessage('system', `Umgestellt: ${modeLabel}`);
   }
   
@@ -481,14 +478,19 @@ function sendTextInput() {
   const text = input.value.trim();
   if (!text || !state.isConnected) return;
   
-  // Send as user message through the same pipeline as voice
+  // Show in chat UI
   handleAdapterMessage('user', text);
   
-  // Also send to adapter so the LLM gets it
+  // Send to LLM via adapter — this is the CRITICAL path!
   if (state.adapter && state.adapter.sendText) {
-    state.adapter.sendText(text);
-  } else if (state.adapter && state.adapter.sendMessage) {
-    state.adapter.sendMessage(text);
+    // In voice mode: prefix with [TYPED] so LLM knows this is a text correction/addition
+    const payload = (state.interactionMode === 'voice')
+      ? `[Getippte Korrektur/Ergänzung]: ${text}`
+      : text;
+    state.adapter.sendText(payload);
+    console.log('[TextInput] ✅ Sent to LLM:', payload.substring(0, 80));
+  } else {
+    console.error('[TextInput] ❌ adapter.sendText not available!');
   }
   
   input.value = '';
@@ -918,11 +920,9 @@ async function startInterview() {
   document.getElementById('endBtn').disabled = false;
   document.getElementById('saveBtn').disabled = false;
   
-  // Enable text input in hybrid mode
-  if (state.interactionMode === 'hybrid') {
-    document.getElementById('textInput').disabled = false;
-    document.getElementById('textSendBtn').disabled = false;
-  }
+  // Enable text input in ALL modes — user should always be able to type
+  document.getElementById('textInput').disabled = false;
+  document.getElementById('textSendBtn').disabled = false;
   
   state.startTime = Date.now();
   state.durationTimer = setInterval(updateDuration, 1000);
@@ -1136,7 +1136,10 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   p += `8. Bei \"Fass zusammen\" → sofort ausfuehren.\n`;
   p += `9. Subjekt = IMMER der Endkunde.\n`;
   p += `10. BLOCK-WECHSEL: Wenn du zum naechsten Block wechselst, sage WARUM in 5 Worten.\n`;
-  p += `   Beispiel: \"Gut, zum Thema Entscheidung hab ich genug. Jetzt interessiert mich der Alltag.\"\n\n`;
+  p += `   Beispiel: \"Gut, zum Thema Entscheidung hab ich genug. Jetzt interessiert mich der Alltag.\"\n`;
+  p += `11. TEXT-KORREKTUR: Wenn eine User-Nachricht mit [Getippte Korrektur/Ergaenzung] beginnt, hat der User GETIPPT statt gesprochen.\n`;
+  p += `   Das ist eine KORREKTUR oder ERGAENZUNG — uebernimm die exakte Schreibweise und beziehe dich darauf.\n`;
+  p += `   Wiederhole NICHT was die Spracherkennung falsch verstanden hat.\n\n`;
 
   // ═══ WUNSCH-MODUS ═══
   p += `═══ WUNSCH-MODUS ═══\n`;

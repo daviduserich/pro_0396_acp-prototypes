@@ -172,6 +172,37 @@ class XaiRealtimeAdapter {
   }
 
   /**
+   * Send a text message from the user into the conversation.
+   * Injects it as a conversation item so the LLM actually sees it.
+   * Then triggers a response so the agent reacts to it.
+   * @param {string} text - The user's typed text
+   */
+  sendText(text) {
+    if (!this._connected || !this.ws) {
+      console.warn('[xAI] Cannot send text — not connected');
+      return;
+    }
+    
+    // 1. Inject user text as a conversation item
+    this._sendEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{
+          type: 'input_text',
+          text: text
+        }]
+      }
+    });
+    
+    // 2. Trigger agent response
+    this._sendEvent({ type: 'response.create' });
+    
+    console.log('[xAI] 📝 Text injected:', text.substring(0, 80));
+  }
+
+  /**
    * Enable/disable audio playback (TTS gating).
    * When disabled, audio chunks from the server are silently discarded.
    * Text transcript still works normally.
