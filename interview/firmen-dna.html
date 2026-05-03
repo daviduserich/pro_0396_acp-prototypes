@@ -414,6 +414,9 @@ window.startInterview = async function() {
           state.isConnected = true;
           state.startTime = Date.now();
           document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Aktiv';
+          document.getElementById('micStatus').textContent = '🟢 Mikrofon verbunden';
+          document.getElementById('micStatus').style.color = 'var(--green)';
+          document.getElementById('micBtn').disabled = false;
           document.getElementById('startBtn').style.display = 'none';
           document.getElementById('stopBtn').style.display = '';
           document.getElementById('textInput').disabled = false;
@@ -431,6 +434,8 @@ window.startInterview = async function() {
     state.isConnected = true;
     state.startTime = Date.now();
     document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Demo';
+    document.getElementById('micStatus').textContent = '📝 Text-Modus (Demo)';
+    document.getElementById('micStatus').style.color = 'var(--yellow)';
     document.getElementById('startBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = '';
     document.getElementById('textInput').disabled = false;
