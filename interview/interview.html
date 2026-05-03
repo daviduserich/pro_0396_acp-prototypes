@@ -149,8 +149,24 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .status-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); }
 .status-dot.paused { background:var(--yellow); }
 .status-dot.completed { background:var(--accent); }
+/* ─── SIDEBAR TOGGLE FIX ─── */
+.main.sidebar-collapsed .sidebar-toggle { left:0 !important; }
 
-/* ─── SESSION ROWS (sidebar) ─── */
+/* ─── AVATAR CARD ─── */
+.avatar-field-group { margin-bottom:8px; }
+.avatar-group-title { font-size:11px; font-weight:600; color:var(--accent-light); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.3px; }
+.avatar-field { font-size:12px; color:var(--text-dim); padding:3px 0 3px 4px; line-height:1.4; border-left:2px solid var(--border); margin-left:4px; padding-left:8px; transition:all 0.3s; }
+.avatar-field.filled { color:var(--text); border-left-color:var(--green); }
+.avatar-field .af-icon { font-size:11px; margin-right:2px; }
+.avatar-field .af-value { color:var(--text); font-weight:500; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .main { grid-template-columns:1fr; }
+  .sidebar { display:none; }
+  .msg { max-width:90%; }
+  .chat-area { border-left:none; }
+}
 .session-row { display:grid; grid-template-columns:1fr 1fr 80px 100px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
 .session-row:last-child { border:none; }
 .session-client { font-weight:500; }
@@ -164,13 +180,6 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .welcome h2 { font-size:22px; font-weight:600; }
 .welcome p { color:var(--text-dim); max-width:400px; line-height:1.6; font-size:14px; }
 
-/* ─── RESPONSIVE ─── */
-@media (max-width: 768px) {
-  .main { grid-template-columns:1fr; }
-  .sidebar { display:none; }
-  .msg { max-width:90%; }
-  .chat-area { border-left:none; }
-}
 </style>
 <!-- LiveKit SDK -->
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
@@ -181,7 +190,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.6 — Persona-Engine (Multimodal)</span>
+  <span class="version">V2.7 — Persona-Engine (Multimodal + Avatar-Card)</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -239,6 +248,49 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     <div class="sidebar-section">
       <div class="sidebar-title">🧠 Brain Status</div>
       <div id="brainSummary" style="font-size:12px; color:var(--text-muted); line-height:1.5;">Orchestrator bereit — wird aktiv sobald das Gespräch läuft.</div>
+    </div>
+    <!-- Avatar-Steckbrief: Live-Persona-Card -->
+    <div class="sidebar-section" id="avatarCardSection">
+      <div class="sidebar-title" style="cursor:pointer;" onclick="toggleAvatarCard()">
+        🧑 Avatar-Steckbrief <span id="avatarToggleIcon" style="margin-left:auto; font-size:10px;">▼</span>
+      </div>
+      <div id="avatarCardBody">
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">A. Kundenprofil</div>
+          <div class="avatar-field" id="af-branche"><span class="af-icon">⏳</span> Branche</div>
+          <div class="avatar-field" id="af-region"><span class="af-icon">⏳</span> Region</div>
+          <div class="avatar-field" id="af-entscheider"><span class="af-icon">⏳</span> Entscheider</div>
+          <div class="avatar-field" id="af-groesse"><span class="af-icon">⏳</span> Firmengrösse</div>
+        </div>
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">B. Problem & Schmerz</div>
+          <div class="avatar-field" id="af-problem"><span class="af-icon">⏳</span> Grösstes Problem</div>
+          <div class="avatar-field" id="af-kosten"><span class="af-icon">⏳</span> Zeit/Geld-Verlust</div>
+          <div class="avatar-field" id="af-versucht"><span class="af-icon">⏳</span> Schon versucht</div>
+        </div>
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">C. Entscheidung</div>
+          <div class="avatar-field" id="af-trigger"><span class="af-icon">⏳</span> Trigger/Anlass</div>
+          <div class="avatar-field" id="af-dauer"><span class="af-icon">⏳</span> Entscheidungsdauer</div>
+          <div class="avatar-field" id="af-mitentscheider"><span class="af-icon">⏳</span> Mitentscheider</div>
+        </div>
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">D. Informationsverhalten</div>
+          <div class="avatar-field" id="af-suchkanal"><span class="af-icon">⏳</span> Wo sucht er?</div>
+          <div class="avatar-field" id="af-plattformen"><span class="af-icon">⏳</span> Plattformen</div>
+        </div>
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">E. Werte & Mentalität</div>
+          <div class="avatar-field" id="af-werte"><span class="af-icon">⏳</span> Wichtigste Werte</div>
+          <div class="avatar-field" id="af-stil"><span class="af-icon">⏳</span> Arbeitsstil</div>
+        </div>
+        <div class="avatar-field-group">
+          <div class="avatar-group-title">F. Wunsch vs. Problem</div>
+          <div class="avatar-field" id="af-wunschkunde"><span class="af-icon">⏳</span> Wunschkunde</div>
+          <div class="avatar-field" id="af-problemkunde"><span class="af-icon">⏳</span> Problemkunde</div>
+        </div>
+        <div id="avatarProgress" style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">0 / 16 Felder gefüllt</div>
+      </div>
     </div>
   </div>
 
@@ -409,6 +461,11 @@ function setMode(mode) {
     document.getElementById('textSendBtn').disabled = true;
   }
   
+  // TTS gating: tell adapter to mute/unmute audio playback
+  if (state.adapter && state.adapter.setAudioPlaybackEnabled) {
+    state.adapter.setAudioPlaybackEnabled(mode === 'voice');
+  }
+  
   // Show feedback if session is active
   if (state.isConnected) {
     const modeLabel = mode === 'voice' ? '🔊 Voice-Modus' : mode === 'read' ? '📖 Lese-Modus' : '⌨️ Hybrid-Modus';
@@ -495,6 +552,37 @@ function handleAdapterMessage(role, content, data) {
   let flags = [];
   let displayContent = content;
   
+  // ─── STT Deduplication: xAI sends multiple transcription events ───
+  if (role === 'user') {
+    const trimmed = content.trim();
+    if (!trimmed) return; // Skip empty
+    
+    // Exact duplicate → skip
+    if (trimmed === state._lastUserMsg) return;
+    
+    // New message is extension of previous (user continued speaking)
+    // → Replace the shorter version with the longer one
+    if (state._lastUserMsg && trimmed.startsWith(state._lastUserMsg)) {
+      // Remove the previous (shorter) bubble, keep the longer one
+      const msgs = document.querySelectorAll('#chatMessages .msg.user');
+      if (msgs.length > 0) {
+        const lastBubble = msgs[msgs.length - 1];
+        const lastText = lastBubble.textContent.replace(/👤 Du/g, '').trim();
+        if (lastText === state._lastUserMsg) {
+          lastBubble.remove();
+          state.messageCount--;
+          console.log('[STT-Dedup] 🔄 Replaced shorter with longer version');
+        }
+      }
+    }
+    // Previous was extension of new (shorter resend) → skip
+    else if (state._lastUserMsg && state._lastUserMsg.startsWith(trimmed)) {
+      return;
+    }
+    
+    state._lastUserMsg = trimmed;
+  }
+  
   // ─── Post-Processing: Agent-Responses prüfen ───
   if (role === 'assistant') {
     const result = postProcessAgentResponse(content);
@@ -508,6 +596,7 @@ function handleAdapterMessage(role, content, data) {
         injectCorrection(flags);
       }
     }
+    state._lastUserMsg = null; // Reset dedup tracker on agent turn
   }
   
   addMessage(role, displayContent);
@@ -515,6 +604,11 @@ function handleAdapterMessage(role, content, data) {
   // ─── Orchestrator Hook: Send to brain after each turn ───
   if (state.sessionId && (role === 'user' || role === 'assistant')) {
     sendToOrchestrator(role, content, flags);
+  }
+  
+  // ─── Avatar Card: Update every 5 agent turns ───
+  if (role === 'assistant') {
+    maybeUpdateAvatarCard();
   }
 }
 
@@ -882,6 +976,15 @@ async function startInterview() {
       state._basePrompt = systemPrompt;
       await state.adapter.connect(tokenData.xai_token, systemPrompt);
       
+      // Store API key for avatar card extraction (chat completions)
+      // The xai_token IS the API key (used for both WebSocket and REST)
+      state._xaiApiKey = tokenData.xai_api_key || tokenData.xai_token;
+      
+      // Set initial TTS mode: only play audio in voice mode
+      if (state.adapter.setAudioPlaybackEnabled) {
+        state.adapter.setAudioPlaybackEnabled(state.interactionMode === 'voice');
+      }
+      
       if (isResume) {
         addMessage('system', `✅ Fortgesetzt (gleiche Session ${state.sessionId.substring(0,8)}...)`);
       } else {
@@ -1015,13 +1118,16 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   // ═══ REGELN ═══
   p += `═══ REGELN ═══\n`;
   p += `1. EINE FRAGE → EIN FELD. Nach dem Fragezeichen STOPP.\n`;
-  p += `2. KEINE Fuellwoerter ("Spannend", "Interessant", "Verstehe"). DIREKT fragen.\n`;
-  p += `3. VERBOTEN: "Welche Worte benutzt er?" → Frage nach SITUATIONEN, nicht Zitaten.\n`;
-  p += `4. VERBOTEN: Fragen ueber den Inhaber oder Marketing-Begriffe.\n`;
-  p += `5. B2B: Frage nach FIRMA + ENTSCHEIDER.\n`;
-  p += `6. Bei "weiss nicht" → SOFORT naechstes Feld. Nie 2x gleicher Punkt.\n`;
-  p += `7. Bei "Fass zusammen" → sofort ausfuehren.\n`;
-  p += `8. Subjekt = IMMER der Endkunde.\n\n`;
+  p += `2. KEINE Fuellwoerter (\"Spannend\", \"Interessant\", \"Verstehe\", \"Danke\"). DIREKT fragen.\n`;
+  p += `3. VERBOTEN: Beginne NIEMALS mit \"Danke\". Knuepfe direkt an das Gesagte an.\n`;
+  p += `4. VERBOTEN: \"Welche Worte benutzt er?\" → Frage nach SITUATIONEN, nicht Zitaten.\n`;
+  p += `5. VERBOTEN: Fragen ueber den Inhaber oder Marketing-Begriffe.\n`;
+  p += `6. B2B: Frage nach FIRMA + ENTSCHEIDER.\n`;
+  p += `7. Bei \"weiss nicht\" → SOFORT naechstes Feld. Nie 2x gleicher Punkt.\n`;
+  p += `8. Bei \"Fass zusammen\" → sofort ausfuehren.\n`;
+  p += `9. Subjekt = IMMER der Endkunde.\n`;
+  p += `10. BLOCK-WECHSEL: Wenn du zum naechsten Block wechselst, sage WARUM in 5 Worten.\n`;
+  p += `   Beispiel: \"Gut, zum Thema Entscheidung hab ich genug. Jetzt interessiert mich der Alltag.\"\n\n`;
 
   // ═══ WUNSCH-MODUS ═══
   p += `═══ WUNSCH-MODUS ═══\n`;
@@ -1346,6 +1452,16 @@ function toggleSidebar() {
   main.classList.toggle('sidebar-collapsed');
   const collapsed = main.classList.contains('sidebar-collapsed');
   btn.textContent = collapsed ? '▶' : '◀';
+  
+  // When collapsed: clear inline left so CSS !important rule positions at 0
+  // When expanded: restore saved width position
+  if (collapsed) {
+    btn.style.left = '';
+  } else {
+    const savedWidth = localStorage.getItem('acp_sidebar_width');
+    if (savedWidth) btn.style.left = savedWidth + 'px';
+  }
+  
   localStorage.setItem('acp_sidebar_collapsed', collapsed);
 }
 
@@ -1395,6 +1511,137 @@ function initSidebarResize() {
     const width = getComputedStyle(main).getPropertyValue('--sidebar-width');
     localStorage.setItem('acp_sidebar_width', parseInt(width));
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AVATAR-STECKBRIEF: Live Persona Card
+// Updates every 5 agent turns via lightweight LLM extraction
+// ═══════════════════════════════════════════════════════════════
+
+let _avatarData = {};
+let _avatarAgentTurnCount = 0;
+let _avatarCardVisible = true;
+
+function toggleAvatarCard() {
+  _avatarCardVisible = !_avatarCardVisible;
+  document.getElementById('avatarCardBody').style.display = _avatarCardVisible ? 'block' : 'none';
+  document.getElementById('avatarToggleIcon').textContent = _avatarCardVisible ? '▼' : '▶';
+}
+
+// Field mapping: JSON key → DOM id
+const AVATAR_FIELDS = {
+  branche: 'af-branche', region: 'af-region', entscheider: 'af-entscheider', groesse: 'af-groesse',
+  problem: 'af-problem', kosten: 'af-kosten', versucht: 'af-versucht',
+  trigger: 'af-trigger', dauer: 'af-dauer', mitentscheider: 'af-mitentscheider',
+  suchkanal: 'af-suchkanal', plattformen: 'af-plattformen',
+  werte: 'af-werte', stil: 'af-stil',
+  wunschkunde: 'af-wunschkunde', problemkunde: 'af-problemkunde'
+};
+
+function renderAvatarCard(data) {
+  _avatarData = { ..._avatarData, ...data };
+  let filled = 0;
+  for (const [key, domId] of Object.entries(AVATAR_FIELDS)) {
+    const el = document.getElementById(domId);
+    if (!el) continue;
+    const val = _avatarData[key];
+    if (val && val.trim && val.trim() !== '' && val !== '?') {
+      el.innerHTML = `<span class="af-icon">✅</span> <span class="af-value">${escapeHtml(val)}</span>`;
+      el.classList.add('filled');
+      filled++;
+    }
+  }
+  document.getElementById('avatarProgress').textContent = `${filled} / ${Object.keys(AVATAR_FIELDS).length} Felder gefüllt`;
+}
+
+// Called from handleAdapterMessage on every assistant turn
+function maybeUpdateAvatarCard() {
+  _avatarAgentTurnCount++;
+  // Update every 5 agent turns, or on first turn
+  if (_avatarAgentTurnCount === 1 || _avatarAgentTurnCount % 5 === 0) {
+    extractAvatarFromChat();
+  }
+}
+
+async function extractAvatarFromChat() {
+  // Collect conversation from DOM
+  const msgs = [];
+  document.querySelectorAll('#chatMessages .msg').forEach(el => {
+    const roleLabel = el.querySelector('.role-label')?.textContent || '';
+    const text = el.textContent.replace(roleLabel, '').trim();
+    if (roleLabel.includes('Agent')) msgs.push(`AGENT: ${text}`);
+    if (roleLabel.includes('Du')) msgs.push(`USER: ${text}`);
+  });
+  
+  if (msgs.length < 2) return;
+  
+  const extractionPrompt = `Analysiere dieses Gespraech und extrahiere die Persona-Felder als JSON.
+Antworte NUR mit einem JSON-Objekt. Fuer unbekannte Felder setze "?".
+
+Felder: branche, region, entscheider, groesse, problem, kosten, versucht, trigger, dauer, mitentscheider, suchkanal, plattformen, werte, stil, wunschkunde, problemkunde
+
+Gespraech:
+${msgs.slice(-20).join('\n')}
+
+JSON:`;
+
+  try {
+    const res = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state._xaiApiKey || ''}`
+      },
+      body: JSON.stringify({
+        model: 'grok-3-mini-fast',
+        messages: [{ role: 'user', content: extractionPrompt }],
+        temperature: 0,
+        max_tokens: 500
+      })
+    });
+    
+    if (!res.ok) {
+      console.warn('[Avatar] API error:', res.status);
+      // Fallback: try lightweight regex extraction
+      extractAvatarRegex(msgs);
+      return;
+    }
+    
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      renderAvatarCard(parsed);
+      console.log('[Avatar] ✅ Updated via LLM:', Object.keys(parsed).filter(k => parsed[k] && parsed[k] !== '?').length, 'fields');
+    }
+  } catch (e) {
+    console.warn('[Avatar] Extraction error:', e.message);
+    // Fallback to regex
+    extractAvatarRegex(msgs);
+  }
+}
+
+// Lightweight fallback: simple pattern matching (no API needed)
+function extractAvatarRegex(msgs) {
+  const allText = msgs.join(' ').toLowerCase();
+  const updates = {};
+  
+  // Simple heuristic patterns
+  if (allText.includes('branche') || allText.includes('installateur') || allText.includes('handwerk')) {
+    const match = allText.match(/branche[:\s]+([^.!?]+)/i);
+    if (match) updates.branche = match[1].trim().substring(0, 50);
+  }
+  if (allText.includes('region') || allText.includes('schweiz') || allText.includes('zürich')) {
+    updates.region = allText.includes('schweiz') ? 'Schweiz' : '?';
+  }
+  
+  if (Object.keys(updates).length > 0) {
+    renderAvatarCard(updates);
+    console.log('[Avatar] 🔄 Updated via regex fallback');
+  }
 }
 
 // ─── Boot ───

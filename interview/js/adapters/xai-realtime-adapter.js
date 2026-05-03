@@ -42,6 +42,7 @@ class XaiRealtimeAdapter {
     this._responseBuffer = '';
     this._audioQueue = [];
     this._isPlaying = false;
+    this._audioPlaybackEnabled = true;  // TTS gating: false = discard audio chunks
   }
 
   /**
@@ -168,6 +169,22 @@ class XaiRealtimeAdapter {
       session: { instructions: newInstructions }
     });
     console.log('[xAI] Instructions updated by orchestrator');
+  }
+
+  /**
+   * Enable/disable audio playback (TTS gating).
+   * When disabled, audio chunks from the server are silently discarded.
+   * Text transcript still works normally.
+   * @param {boolean} enabled
+   */
+  setAudioPlaybackEnabled(enabled) {
+    this._audioPlaybackEnabled = enabled;
+    if (!enabled) {
+      // Clear any queued audio
+      this._audioQueue = [];
+      this._isPlaying = false;
+    }
+    console.log(`[xAI] Audio playback ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   // ─── Event Handling ───
@@ -346,6 +363,8 @@ class XaiRealtimeAdapter {
   // ─── Audio Playback ───
 
   _queueAudio(base64Data) {
+    // TTS gating: silently discard audio when playback is disabled
+    if (!this._audioPlaybackEnabled) return;
     const binary = atob(base64Data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
