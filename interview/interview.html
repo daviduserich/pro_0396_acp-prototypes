@@ -653,6 +653,15 @@ function postProcessAgentResponse(content) {
     console.log('[PostProcess] 🔄 Verstehe → ' + ACKNOWLEDGMENTS[newIdx]);
   }
   
+  // 3. "Danke"-Stripping: Silently remove "Danke, " at start (safety net)
+  if (/^danke[.,!]?\s*/i.test(processed.trim())) {
+    processed = processed.replace(/^danke[.,!]?\s*/i, '');
+    // Capitalize first letter after removal
+    processed = processed.charAt(0).toUpperCase() + processed.slice(1);
+    flags.push('DANKE_STRIPPED');
+    console.log('[PostProcess] 🚫 "Danke" entfernt');
+  }
+  
   // 3. Tabu-Wort-Check (28 Wörter)
   const TABU_WORDS = [
     'Persona', 'Zielgruppe', 'Pain Point', 'Touchpoint', 'Content-Strategie',
