@@ -112,6 +112,21 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .ctrl-btn.primary:hover { background:var(--accent-light); }
 .ctrl-btn:disabled { opacity:0.4; cursor:not-allowed; }
 
+/* ─── TEXT INPUT BAR ─── */
+.text-input-bar { padding:8px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:10px; }
+.text-input-bar input { flex:1; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; color:var(--text); font-size:14px; font-family:var(--font); outline:none; transition:border-color 0.2s; }
+.text-input-bar input:focus { border-color:var(--accent); }
+.text-input-bar input::placeholder { color:var(--text-muted); }
+.text-input-bar button { padding:10px 16px; border-radius:var(--radius-sm); border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; transition:all 0.2s; }
+.text-input-bar button:hover { background:var(--accent-light); }
+.text-input-bar button:disabled { opacity:0.4; cursor:not-allowed; }
+
+/* ─── MODE TOGGLE ─── */
+.mode-toggle { display:flex; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; }
+.mode-btn { padding:6px 12px; font-size:11px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-muted); font-family:var(--font); transition:all 0.2s; white-space:nowrap; }
+.mode-btn.active { background:var(--accent); color:#fff; }
+.mode-btn:hover:not(.active) { background:var(--bg-hover); color:var(--text); }
+
 /* ─── SIDEBAR (LEFT) ─── */
 .sidebar { padding:16px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border-right:1px solid var(--border); transition:padding 0.3s, opacity 0.3s; min-width:0; }
 .main.sidebar-collapsed .sidebar { padding:0; opacity:0; pointer-events:none; }
@@ -166,7 +181,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.5 — Persona-Engine (Avatar-Steckbrief)</span>
+  <span class="version">V2.6 — Persona-Engine (Multimodal)</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -184,6 +199,14 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     <div class="engine-toggle">
       <button class="engine-btn" data-engine="livekit" onclick="setEngine('livekit')">LiveKit/Claude</button>
       <button class="engine-btn active" data-engine="xai" onclick="setEngine('xai')">xAI/Grok</button>
+    </div>
+  </div>
+  <div class="config-group">
+    <label>Modus</label>
+    <div class="mode-toggle">
+      <button class="mode-btn" data-mode="voice" onclick="setMode('voice')" title="Agent spricht, Sie sprechen">🔊 Voice</button>
+      <button class="mode-btn active" data-mode="read" onclick="setMode('read')" title="Agent schreibt, Sie sprechen">📖 Lesen</button>
+      <button class="mode-btn" data-mode="hybrid" onclick="setMode('hybrid')" title="Agent schreibt, Sie sprechen oder tippen">⌨️ Hybrid</button>
     </div>
   </div>
 </div>
@@ -234,6 +257,12 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       <div class="typing-dot"></div>
     </div>
 
+    <!-- Text Input Bar -->
+    <div class="text-input-bar" id="textInputBar" style="display:none;">
+      <input type="text" id="textInput" placeholder="Antwort eintippen... (Enter zum Senden)" disabled>
+      <button id="textSendBtn" onclick="sendTextInput()" disabled>Senden</button>
+    </div>
+
     <!-- Controls — alle Aktions-Buttons auf einer Linie -->
     <div class="controls">
       <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Interview starten</button>
@@ -272,6 +301,8 @@ let state = {
   currentTopicIndex: 0,
   adapter: null,
   _turnIndex: 0,
+  interactionMode: 'read',   // 'voice' | 'read' | 'hybrid'
+  ttsEnabled: false,          // true = agent speaks, false = text only
 };
 
 // ─── Supabase Helper ───
@@ -358,6 +389,58 @@ function setEngine(engine) {
   document.querySelectorAll('.engine-btn').forEach(b => b.classList.toggle('active', b.dataset.engine === engine));
   document.getElementById('engineLabel').textContent = engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok';
 }
+
+// ─── Mode Toggle (Voice / Read / Hybrid) ───
+function setMode(mode) {
+  state.interactionMode = mode;
+  state.ttsEnabled = (mode === 'voice');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  
+  // Show/hide text input bar
+  const textBar = document.getElementById('textInputBar');
+  textBar.style.display = (mode === 'hybrid') ? 'flex' : 'none';
+  
+  // In hybrid mode, enable text input if session is active
+  if (mode === 'hybrid' && state.isConnected) {
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textSendBtn').disabled = false;
+  }
+  
+  console.log(`[Mode] ${mode} | TTS: ${state.ttsEnabled}`);
+}
+
+// ─── Text Input (Keyboard answers) ───
+function sendTextInput() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text || !state.isConnected) return;
+  
+  // Send as user message through the same pipeline as voice
+  handleAdapterMessage('user', text);
+  
+  // Also send to adapter so the LLM gets it
+  if (state.adapter && state.adapter.sendText) {
+    state.adapter.sendText(text);
+  } else if (state.adapter && state.adapter.sendMessage) {
+    state.adapter.sendMessage(text);
+  }
+  
+  input.value = '';
+  input.focus();
+}
+
+// Keyboard listener for text input Enter key
+document.addEventListener('DOMContentLoaded', () => {
+  const textInput = document.getElementById('textInput');
+  if (textInput) {
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendTextInput();
+      }
+    });
+  }
+});
 
 // ─── Topic Rendering ───
 function renderTopics() {
@@ -699,6 +782,8 @@ function handleAdapterStatus(status) {
     document.getElementById('pauseBtn').disabled = true;
     document.getElementById('endBtn').disabled = true;
     document.getElementById('startBtn').disabled = false;
+    document.getElementById('textInput').disabled = true;
+    document.getElementById('textSendBtn').disabled = true;
     // Keep save button enabled so user can still save after disconnect
     if (state.durationTimer) { clearInterval(state.durationTimer); state.durationTimer = null; }
   } else if (status === 'error') {
@@ -713,12 +798,20 @@ function handleAudioLevel(level) {
 // ─── Session Controls ───
 async function startInterview() {
   const engineLabel = state.engine === 'livekit' ? 'LiveKit/Claude' : 'xAI/Grok';
-  addMessage('system', `Interview wird gestartet... (${engineLabel})`);
+  const modeLabel = state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid';
+  addMessage('system', `Interview wird gestartet... (${engineLabel} | ${modeLabel})`);
   document.getElementById('startBtn').disabled = true;
   document.getElementById('micBtn').disabled = false;
   document.getElementById('pauseBtn').disabled = false;
   document.getElementById('endBtn').disabled = false;
   document.getElementById('saveBtn').disabled = false;
+  
+  // Enable text input in hybrid mode
+  if (state.interactionMode === 'hybrid') {
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textSendBtn').disabled = false;
+  }
+  
   state.startTime = Date.now();
   state.durationTimer = setInterval(updateDuration, 1000);
   document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Verbinde...';
@@ -856,10 +949,9 @@ async function buildSystemPrompt(moduleName, topics) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PERSONA-WORKSHOP V2.2: Journalist-Persona-Engine
-// Basiert auf Schwarm-Synthese (5 LLMs) + Discovery/Deep-Dive Architektur
-// 3-Schichten-Prompt: Global Rules + Phase Micro-Prompt + State Block
-// Phase 0 (Radar) + Phasen 1-6 (Deep-Dive) — dynamisch via Orchestrator
+// PERSONA-WORKSHOP V2.6: Multimodal + Conversation Design Patterns
+// NEU: Opportunistic Extraction, Implicit Confirmation, Laddering,
+// Repair-Protokoll, Persona-Konsistenz, One-Breath-Rule
 // ═══════════════════════════════════════════════════════════════
 function buildPersonaWorkshopPrompt(ctx, moduleName) {
   const sie = ctx?.tone !== 'du';
@@ -960,6 +1052,40 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   
   p += `Nach max 5 Fragen pro Block → weiter. Ab Frage 18: Abschluss.\n\n`;
 
+  // ═══ CONVERSATION DESIGN PATTERNS ═══
+  p += `═══ GESPRÄCHS-TECHNIKEN ═══\n\n`;
+  
+  p += `OPPORTUNISTIC EXTRACTION:\n`;
+  p += `Wenn der Inhaber in EINER Antwort MEHRERE Felder beantwortet → ueberspringe diese Felder.\n`;
+  p += `Beispiel: "Wir machen Heizungen fuer Installateure mit 10-50 Mitarbeitern"\n`;
+  p += `→ Das fuellt: Branche, Firmentyp, Groesse. Frage NICHT nochmal danach.\n\n`;
+  
+  p += `IMPLICIT CONFIRMATION:\n`;
+  p += `Baue das eben Gesagte in die naechste Frage ein statt explizit zu bestaetigen.\n`;
+  p += `FALSCH: "Okay, Installateure. Und wie viele Kunden?"\n`;
+  p += `RICHTIG: "Wie viele Installateure bedienen ${S} ungefaehr?"\n`;
+  p += `Der User korrigiert von selbst wenn etwas nicht stimmt.\n\n`;
+  
+  p += `ONE-BREATH-RULE:\n`;
+  p += `Deine Antwort muss in EINEM ATEMZUG sprechbar sein.\n`;
+  p += `Wenn du Luft holen muesstest → kuerze.\n\n`;
+  
+  p += `LADDERING ("Und dann?"):\n`;
+  p += `Wenn der Inhaber eine Geschichte erzaehlt → unterbreche NICHT.\n`;
+  p += `Stattdessen: "Und dann?", "Warum gerade der?", "Was passierte dann?"\n`;
+  p += `Erst wenn die Geschichte zu Ende ist → naechstes Feld im Steckbrief.\n\n`;
+  
+  p += `REPAIR-PROTOKOLL:\n`;
+  p += `- "Hab ich gesagt" → "Stimmt." + naechstes offenes Feld\n`;
+  p += `- Unklare Antwort → Mini-Hypothese: "Also eher [X] oder [Y]?"\n`;
+  p += `- Frustration → Zusammenfassung + "Was sollte ich noch wissen?"\n`;
+  p += `Jede Repair-Aktion in MAX 10 Woertern.\n\n`;
+  
+  p += `PERSONA-KONSISTENZ:\n`;
+  p += `Du bist ein neugieriger JOURNALIST. Dein einziger Modus: FRAGEN.\n`;
+  p += `Du erklaerst NICHTS. Du bewertest NICHTS. Du lobst NICHTS.\n`;
+  p += `Neugierig wie ein Kind: "Und dann? Und warum? Wer genau?"\n\n`;
+
   // ═══ FORMAT ═══
   p += `═══ FORMAT ═══\n`;
   p += `NUR die Frage. Max 15 Woerter. Dann STOPP.\n`;
@@ -973,7 +1099,7 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   p += `"Ich frage, ${S} erzaehlen. Los gehts."\n`;
   p += `Max 2 Saetze, dann Einstiegsfrage. Spreche Deutsch.`;
 
-  console.log('[System Prompt – Persona V2.5]', p.substring(0, 200) + '...');
+  console.log('[System Prompt – Persona V2.6]', p.substring(0, 200) + '...');
   console.log('[Prompt-Laenge]', p.length, 'Zeichen (~' + Math.round(p.length/4) + ' Token)');
   return p;
 }
