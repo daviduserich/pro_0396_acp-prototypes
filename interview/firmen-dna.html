@@ -144,7 +144,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     </div>
     <div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
     <div class="controls">
-      <button class="ctrl-btn" id="micBtn" disabled title="Mikrofon">🎙️</button>
+      <button class="ctrl-btn" id="micBtn" onclick="toggleMic()" disabled title="Mikrofon aus">🎙️</button>
       <span style="flex:1;font-size:12px;color:var(--text-muted);" id="micStatus">Nicht verbunden</span>
     </div>
     <div class="text-input-bar" id="textInputBar">
@@ -160,9 +160,9 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 
 // ═══ STATE ═══
 const state = {
-  clientId: '', engine: 'xai', interactionMode: 'hybrid', ttsEnabled: false,
-  isConnected: false, adapter: null, sessionId: null,
-  messageCount: 0, startTime: null, _lastUserMsg: null,
+  clientId: '', engine: 'xai', interactionMode: 'voice', ttsEnabled: true,
+  isConnected: false, isRecording: false, adapter: null, sessionId: null,
+  messageCount: 0, startTime: null, _lastUserMsg: null, _cachedToken: null,
   dnaData: {}
 };
 
@@ -386,7 +386,21 @@ function buildSystemPrompt() {
   return p;
 }
 
-// ═══ START / STOP ═══
+// ═══ MIC TOGGLE ═══
+function toggleMic() {
+  state.isRecording = !state.isRecording;
+  const btn = document.getElementById('micBtn');
+  btn.classList.toggle('active', state.isRecording);
+  btn.title = state.isRecording ? '🟢 Mikrofon aktiv' : '🔴 Mikrofon aus';
+  btn.textContent = state.isRecording ? '🔴' : '🎙️';
+  document.getElementById('micStatus').textContent = state.isRecording ? '🟢 Mikrofon aktiv' : '🔇 Mikrofon aus';
+  document.getElementById('micStatus').style.color = state.isRecording ? 'var(--green)' : 'var(--text-muted)';
+  if (state.adapter && state.adapter.setMicEnabled) {
+    state.adapter.setMicEnabled(state.isRecording);
+  }
+}
+
+// ═══ START INTERVIEW ═══
 window.startInterview = async function() {
   if (!state.clientId) return;
   addMessage('system', 'Interview wird gestartet... (xAI/Grok | ' + 
@@ -420,6 +434,19 @@ window.startInterview = async function() {
     
     state.adapter = adapter;
     await adapter.connect(tokenData.xai_token, buildSystemPrompt());
+    
+    // Audio-Wiedergabe einschalten (Voice-Modus)
+    if (state.adapter.setAudioPlaybackEnabled) {
+      state.adapter.setAudioPlaybackEnabled(state.interactionMode === 'voice');
+    }
+    
+    // Auto-Mic nach 3s Bot-Greeting
+    setTimeout(() => {
+      if (state.adapter && !state.isRecording) {
+        toggleMic();
+        console.log('[Firmen-DNA] 🎤 Mic auto-enabled after bot greeting');
+      }
+    }, 3000);
   } catch(e) {
     addMessage('system', `⚠️ Token-Fehler: ${e.message}. Demo-Modus aktiv.`);
     state.isConnected = true;
