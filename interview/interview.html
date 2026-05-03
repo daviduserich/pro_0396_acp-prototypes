@@ -156,7 +156,9 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .avatar-field-group { margin-bottom:8px; }
 .avatar-group-title { font-size:11px; font-weight:600; color:var(--accent-light); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.3px; }
 .avatar-field { font-size:12px; color:var(--text-dim); padding:3px 0 3px 4px; line-height:1.4; border-left:2px solid var(--border); margin-left:4px; padding-left:8px; transition:all 0.3s; }
-.avatar-field.filled { color:var(--text); border-left-color:var(--green); }
+.avatar-field.filled { color:var(--text); border-left-color:var(--green); cursor:pointer; }
+.avatar-field.filled:hover { background:rgba(255,255,255,0.05); border-left-color:var(--accent-light); border-radius:0 4px 4px 0; }
+.avatar-field.filled:hover::after { content:'✏️ klicken zum Korrigieren'; font-size:9px; color:var(--text-dim); margin-left:8px; }
 .avatar-field .af-icon { font-size:11px; margin-right:2px; }
 .avatar-field .af-value { color:var(--text); font-weight:500; }
 
@@ -190,7 +192,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.7.2 — Persona-Engine (Text-Fix + Avatar-Card)</span>
+  <span class="version">V2.7.3 — Persona-Engine (Avatar-Korrektur + Endgame)</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -257,37 +259,37 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       <div id="avatarCardBody">
         <div class="avatar-field-group">
           <div class="avatar-group-title">A. Kundenprofil</div>
-          <div class="avatar-field" id="af-branche"><span class="af-icon">⏳</span> Branche</div>
-          <div class="avatar-field" id="af-region"><span class="af-icon">⏳</span> Region</div>
-          <div class="avatar-field" id="af-entscheider"><span class="af-icon">⏳</span> Entscheider</div>
-          <div class="avatar-field" id="af-groesse"><span class="af-icon">⏳</span> Firmengrösse</div>
+          <div class="avatar-field" id="af-branche" onclick="correctAvatarField('branche')"><span class="af-icon">⏳</span> Branche</div>
+          <div class="avatar-field" id="af-region" onclick="correctAvatarField('region')"><span class="af-icon">⏳</span> Region</div>
+          <div class="avatar-field" id="af-entscheider" onclick="correctAvatarField('entscheider')"><span class="af-icon">⏳</span> Entscheider</div>
+          <div class="avatar-field" id="af-groesse" onclick="correctAvatarField('groesse')"><span class="af-icon">⏳</span> Firmengrösse</div>
         </div>
         <div class="avatar-field-group">
           <div class="avatar-group-title">B. Problem & Schmerz</div>
-          <div class="avatar-field" id="af-problem"><span class="af-icon">⏳</span> Grösstes Problem</div>
-          <div class="avatar-field" id="af-kosten"><span class="af-icon">⏳</span> Zeit/Geld-Verlust</div>
-          <div class="avatar-field" id="af-versucht"><span class="af-icon">⏳</span> Schon versucht</div>
+          <div class="avatar-field" id="af-problem" onclick="correctAvatarField('problem')"><span class="af-icon">⏳</span> Grösstes Problem</div>
+          <div class="avatar-field" id="af-kosten" onclick="correctAvatarField('kosten')"><span class="af-icon">⏳</span> Zeit/Geld-Verlust</div>
+          <div class="avatar-field" id="af-versucht" onclick="correctAvatarField('versucht')"><span class="af-icon">⏳</span> Schon versucht</div>
         </div>
         <div class="avatar-field-group">
           <div class="avatar-group-title">C. Entscheidung</div>
-          <div class="avatar-field" id="af-trigger"><span class="af-icon">⏳</span> Trigger/Anlass</div>
-          <div class="avatar-field" id="af-dauer"><span class="af-icon">⏳</span> Entscheidungsdauer</div>
-          <div class="avatar-field" id="af-mitentscheider"><span class="af-icon">⏳</span> Mitentscheider</div>
+          <div class="avatar-field" id="af-trigger" onclick="correctAvatarField('trigger')"><span class="af-icon">⏳</span> Trigger/Anlass</div>
+          <div class="avatar-field" id="af-dauer" onclick="correctAvatarField('dauer')"><span class="af-icon">⏳</span> Entscheidungsdauer</div>
+          <div class="avatar-field" id="af-mitentscheider" onclick="correctAvatarField('mitentscheider')"><span class="af-icon">⏳</span> Mitentscheider</div>
         </div>
         <div class="avatar-field-group">
           <div class="avatar-group-title">D. Informationsverhalten</div>
-          <div class="avatar-field" id="af-suchkanal"><span class="af-icon">⏳</span> Wo sucht er?</div>
-          <div class="avatar-field" id="af-plattformen"><span class="af-icon">⏳</span> Plattformen</div>
+          <div class="avatar-field" id="af-suchkanal" onclick="correctAvatarField('suchkanal')"><span class="af-icon">⏳</span> Wo sucht er?</div>
+          <div class="avatar-field" id="af-plattformen" onclick="correctAvatarField('plattformen')"><span class="af-icon">⏳</span> Plattformen</div>
         </div>
         <div class="avatar-field-group">
           <div class="avatar-group-title">E. Werte & Mentalität</div>
-          <div class="avatar-field" id="af-werte"><span class="af-icon">⏳</span> Wichtigste Werte</div>
-          <div class="avatar-field" id="af-stil"><span class="af-icon">⏳</span> Arbeitsstil</div>
+          <div class="avatar-field" id="af-werte" onclick="correctAvatarField('werte')"><span class="af-icon">⏳</span> Wichtigste Werte</div>
+          <div class="avatar-field" id="af-stil" onclick="correctAvatarField('stil')"><span class="af-icon">⏳</span> Arbeitsstil</div>
         </div>
         <div class="avatar-field-group">
           <div class="avatar-group-title">F. Wunsch vs. Problem</div>
-          <div class="avatar-field" id="af-wunschkunde"><span class="af-icon">⏳</span> Wunschkunde</div>
-          <div class="avatar-field" id="af-problemkunde"><span class="af-icon">⏳</span> Problemkunde</div>
+          <div class="avatar-field" id="af-wunschkunde" onclick="correctAvatarField('wunschkunde')"><span class="af-icon">⏳</span> Wunschkunde</div>
+          <div class="avatar-field" id="af-problemkunde" onclick="correctAvatarField('problemkunde')"><span class="af-icon">⏳</span> Problemkunde</div>
         </div>
         <div id="avatarProgress" style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">0 / 16 Felder gefüllt</div>
       </div>
@@ -1139,7 +1141,10 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   p += `   Beispiel: \"Gut, zum Thema Entscheidung hab ich genug. Jetzt interessiert mich der Alltag.\"\n`;
   p += `11. TEXT-KORREKTUR: Wenn eine User-Nachricht mit [Getippte Korrektur/Ergaenzung] beginnt, hat der User GETIPPT statt gesprochen.\n`;
   p += `   Das ist eine KORREKTUR oder ERGAENZUNG — uebernimm die exakte Schreibweise und beziehe dich darauf.\n`;
-  p += `   Wiederhole NICHT was die Spracherkennung falsch verstanden hat.\n\n`;
+  p += `   Wiederhole NICHT was die Spracherkennung falsch verstanden hat.\n`;
+  p += `12. AVATAR-KORREKTUR: Wenn eine Nachricht mit [Avatar-Korrektur: Feldname] beginnt, korrigiert der User ein Feld im Steckbrief.\n`;
+  p += `   Sage kurz: \"Korrigiert, notiert.\" und mache mit der naechsten offenen Frage weiter.\n`;
+  p += `   Verliere NICHT den Fokus. Diskutiere NICHT ueber den Steckbrief. Einfach korrigieren und weiter.\n\n`;
 
   // ═══ WUNSCH-MODUS ═══
   p += `═══ WUNSCH-MODUS ═══\n`;
@@ -1175,9 +1180,16 @@ function buildPersonaWorkshopPrompt(ctx, moduleName) {
   
   p += `BLOCK 6 — Abschluss (1-2 Fragen)\n`;
   p += `Zusammenfassung des Steckbriefs. "Stimmt das so?"\n`;
-  p += `"Vielen Dank, das reicht fuer ein klares Kundenbild."\n\n`;
+  p += `"Das reicht fuer ein klares Kundenbild."\n\n`;
   
-  p += `Nach max 5 Fragen pro Block → weiter. Ab Frage 18: Abschluss.\n\n`;
+  p += `Nach max 5 Fragen pro Block → weiter. Ab Frage 18: Abschluss.\n`;
+  p += `WICHTIG: Ab Frage 18 stellst du KEINE neuen Fragen mehr. Du fasst zusammen und schliesst ab.\n`;
+  p += `Wenn der User nach dem Abschluss noch Themen anspricht → "Das nehme ich auf, aber fuer den Steckbrief haben wir genug."\n\n`;
+  
+  p += `MULTI-PERSONA: Wenn der User einen ZWEITEN Kundentyp beschreibt der anders ist:\n`;
+  p += `Sage: "Das klingt nach einer separaten Persona. Sollen wir dafuer einen eigenen Steckbrief machen?"\n`;
+  p += `Wenn ja → beginne bei Block 1, aber NUR fuer die neue Persona.\n`;
+  p += `Wenn nein → integriere es in den bestehenden Steckbrief.\n\n`;
 
   // ═══ CONVERSATION DESIGN PATTERNS ═══
   p += `═══ GESPRÄCHS-TECHNIKEN ═══\n\n`;
@@ -1549,6 +1561,42 @@ const AVATAR_FIELDS = {
   werte: 'af-werte', stil: 'af-stil',
   wunschkunde: 'af-wunschkunde', problemkunde: 'af-problemkunde'
 };
+
+// Human-readable labels for correction context
+const AVATAR_LABELS = {
+  branche: 'Branche', region: 'Region', entscheider: 'Entscheider', groesse: 'Firmengrösse',
+  problem: 'Grösstes Problem', kosten: 'Zeit/Geld-Verlust', versucht: 'Schon versucht',
+  trigger: 'Trigger/Anlass', dauer: 'Entscheidungsdauer', mitentscheider: 'Mitentscheider',
+  suchkanal: 'Suchkanal', plattformen: 'Plattformen',
+  werte: 'Wichtigste Werte', stil: 'Arbeitsstil',
+  wunschkunde: 'Wunschkunde', problemkunde: 'Problemkunde'
+};
+
+/**
+ * Avatar-Korrektur: User clicks a filled field → text input pre-filled with correction context.
+ * User types what the field SHOULD say, sends it, and the LLM gets the context.
+ */
+function correctAvatarField(fieldKey) {
+  if (!state.isConnected) return;
+  
+  const el = document.getElementById(AVATAR_FIELDS[fieldKey]);
+  if (!el || !el.classList.contains('filled')) return;
+  
+  const currentValue = _avatarData[fieldKey] || '';
+  const label = AVATAR_LABELS[fieldKey] || fieldKey;
+  
+  const input = document.getElementById('textInput');
+  input.value = `[Avatar-Korrektur: ${label}] Aktuell steht: "${currentValue}" → Richtig ist: `;
+  input.focus();
+  // Move cursor to end
+  input.setSelectionRange(input.value.length, input.value.length);
+  
+  // Visual feedback
+  el.style.borderLeftColor = 'var(--accent-light)';
+  setTimeout(() => { el.style.borderLeftColor = ''; }, 2000);
+  
+  console.log(`[Avatar] ✏️ Korrektur gestartet: ${label} (aktuell: ${currentValue})`);
+}
 
 function renderAvatarCard(data) {
   _avatarData = { ..._avatarData, ...data };
