@@ -162,6 +162,13 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 .avatar-field .af-icon { font-size:11px; margin-right:2px; }
 .avatar-field .af-value { color:var(--text); font-weight:500; }
 
+/* Persona Tabs */
+.persona-tab { background:var(--card); border:1px solid var(--border); color:var(--text-dim); padding:3px 10px; border-radius:4px; cursor:pointer; font-size:11px; transition:all 0.2s; }
+.persona-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.persona-tab:hover:not(.active) { border-color:var(--accent-light); color:var(--text); }
+.persona-tab-add { background:none; border:1px dashed var(--border); color:var(--text-dim); padding:3px 8px; border-radius:4px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+.persona-tab-add:hover { border-color:var(--accent); color:var(--accent); }
+
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
   .main { grid-template-columns:1fr; }
@@ -192,7 +199,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <!-- HEADER -->
 <div class="header">
   <h1>🎙️ ACP Interview-Modul</h1>
-  <span class="version">V2.7.3 — Persona-Engine (Avatar-Korrektur + Endgame)</span>
+  <span class="version">V2.8 — Persona-Engine (Multi-Persona + Popup)</span>
 </div>
 
 <!-- CONFIG BAR -->
@@ -254,7 +261,14 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     <!-- Avatar-Steckbrief: Live-Persona-Card -->
     <div class="sidebar-section" id="avatarCardSection">
       <div class="sidebar-title" style="cursor:pointer;" onclick="toggleAvatarCard()">
-        🧑 Avatar-Steckbrief <span id="avatarToggleIcon" style="margin-left:auto; font-size:10px;">▼</span>
+        🧑 Avatar-Steckbrief
+        <span onclick="event.stopPropagation(); openAvatarPopup();" title="In neuem Fenster öffnen" style="cursor:pointer; margin-left:4px; font-size:13px;">📺</span>
+        <span id="avatarToggleIcon" style="margin-left:auto; font-size:10px;">▼</span>
+      </div>
+      <div id="personaTabBar" style="display:flex; gap:4px; padding:4px 8px; font-size:11px;">
+        <button class="persona-tab active" data-idx="0" onclick="switchPersona(0)">Persona 1</button>
+        <button class="persona-tab" id="personaTab2" data-idx="1" onclick="switchPersona(1)" style="display:none;">Persona 2</button>
+        <button class="persona-tab-add" onclick="addPersona()" title="Neue Persona">+</button>
       </div>
       <div id="avatarCardBody">
         <div class="avatar-field-group">
@@ -1543,15 +1557,141 @@ function initSidebarResize() {
 // Updates every 5 agent turns via lightweight LLM extraction
 // ═══════════════════════════════════════════════════════════════
 
-let _avatarData = {};
+let _personas = [{}]; // Array of persona data objects
+let _activePersonaIdx = 0;
 let _avatarAgentTurnCount = 0;
 let _avatarCardVisible = true;
+let _avatarPopup = null;
+const _avatarChannel = new BroadcastChannel('avatar_sync');
+
+// Current persona data (backward compat)
+function getActivePersonaData() { return _personas[_activePersonaIdx] || {}; }
 
 function toggleAvatarCard() {
   _avatarCardVisible = !_avatarCardVisible;
   document.getElementById('avatarCardBody').style.display = _avatarCardVisible ? 'block' : 'none';
   document.getElementById('avatarToggleIcon').textContent = _avatarCardVisible ? '▼' : '▶';
 }
+
+function switchPersona(idx) {
+  if (idx >= _personas.length) return;
+  _activePersonaIdx = idx;
+  document.querySelectorAll('.persona-tab').forEach(b => b.classList.toggle('active', parseInt(b.dataset.idx) === idx));
+  renderAvatarCard(_personas[idx]);
+  syncPopup();
+}
+
+function addPersona() {
+  if (_personas.length >= 3) return; // max 3 personas
+  _personas.push({});
+  const idx = _personas.length - 1;
+  // Show tab 2
+  const tab2 = document.getElementById('personaTab2');
+  if (tab2 && idx === 1) {
+    tab2.style.display = '';
+    tab2.textContent = 'Persona 2';
+  }
+  switchPersona(idx);
+  addMessage('system', `📋 Persona ${idx + 1} erstellt — neuer Steckbrief bereit.`);
+}
+
+// ─── Popup Window ───
+function openAvatarPopup() {
+  if (_avatarPopup && !_avatarPopup.closed) {
+    _avatarPopup.focus();
+    return;
+  }
+  _avatarPopup = window.open('', 'AvatarSteckbrief', 'width=500,height=700,resizable=yes,scrollbars=yes');
+  if (!_avatarPopup) { alert('Popup blockiert — bitte Pop-ups erlauben.'); return; }
+  
+  const doc = _avatarPopup.document;
+  doc.write(buildPopupHTML());
+  doc.close();
+  syncPopup();
+}
+
+function buildPopupHTML() {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Avatar-Steckbrief</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:#1a1a2e; color:#e0e0e0; padding:16px; }
+  h1 { font-size:18px; margin-bottom:12px; color:#bb86fc; }
+  .tab-bar { display:flex; gap:6px; margin-bottom:12px; }
+  .tab { padding:6px 14px; border-radius:6px; border:1px solid #333; background:#222; color:#aaa; cursor:pointer; font-size:13px; }
+  .tab.active { background:#bb86fc; color:#fff; border-color:#bb86fc; }
+  .group { margin-bottom:14px; }
+  .group-title { font-size:12px; font-weight:700; color:#bb86fc; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px; }
+  .field { font-size:14px; padding:6px 10px; border-left:3px solid #333; margin-left:6px; margin-bottom:4px; line-height:1.5; transition:all 0.3s; cursor:pointer; border-radius:0 4px 4px 0; }
+  .field.filled { border-left-color:#00c853; }
+  .field:hover { background:rgba(255,255,255,0.05); }
+  .field .icon { margin-right:6px; }
+  .field .val { font-weight:500; color:#fff; }
+  .progress { text-align:center; font-size:12px; color:#888; margin-top:10px; }
+  .hint { text-align:center; font-size:11px; color:#666; margin-top:8px; }
+</style></head><body>
+<h1>🧑 Avatar-Steckbrief</h1>
+<div class="tab-bar" id="popupTabs"></div>
+<div id="popupBody"></div>
+<div class="progress" id="popupProgress">0 / 16 Felder gefüllt</div>
+<div class="hint">Klicke auf ein Feld um es zu korrigieren</div>
+<script>
+const ch = new BroadcastChannel('avatar_sync');
+ch.onmessage = (e) => {
+  if (e.data.type === 'update') renderPopup(e.data.personas, e.data.activeIdx);
+};
+// Send correction back to main window
+function popupCorrect(field) {
+  ch.postMessage({ type: 'correct', field });
+}
+function popupSwitch(idx) {
+  ch.postMessage({ type: 'switch', idx });
+}
+const FIELDS = ['branche','region','entscheider','groesse','problem','kosten','versucht','trigger','dauer','mitentscheider','suchkanal','plattformen','werte','stil','wunschkunde','problemkunde'];
+const GROUPS = {
+  'A. Kundenprofil':['branche','region','entscheider','groesse'],
+  'B. Problem & Schmerz':['problem','kosten','versucht'],
+  'C. Entscheidung':['trigger','dauer','mitentscheider'],
+  'D. Informationsverhalten':['suchkanal','plattformen'],
+  'E. Werte & Mentalität':['werte','stil'],
+  'F. Wunsch vs. Problem':['wunschkunde','problemkunde']
+};
+const LABELS = {branche:'Branche',region:'Region',entscheider:'Entscheider',groesse:'Firmengrösse',problem:'Grösstes Problem',kosten:'Zeit/Geld-Verlust',versucht:'Schon versucht',trigger:'Trigger',dauer:'Dauer',mitentscheider:'Mitentscheider',suchkanal:'Suchkanal',plattformen:'Plattformen',werte:'Werte',stil:'Stil',wunschkunde:'Wunschkunde',problemkunde:'Problemkunde'};
+
+function renderPopup(personas, activeIdx) {
+  // Tabs
+  const tabBar = document.getElementById('popupTabs');
+  tabBar.innerHTML = personas.map((p,i) => '<div class="tab '+(i===activeIdx?'active':'')+'" onclick="popupSwitch('+i+')">Persona '+(i+1)+'</div>').join('');
+  // Body
+  const data = personas[activeIdx] || {};
+  let html = '', filled = 0;
+  for (const [gName, fields] of Object.entries(GROUPS)) {
+    html += '<div class="group"><div class="group-title">'+gName+'</div>';
+    for (const f of fields) {
+      const v = data[f];
+      const isFilled = v && v !== '?';
+      if (isFilled) filled++;
+      html += '<div class="field '+(isFilled?'filled':'')+'" onclick="popupCorrect(\\''+f+'\\')"><span class="icon">'+(isFilled?'✅':'⏳')+'</span>'+(isFilled?'<span class="val">'+v+'</span>':LABELS[f])+'</div>';
+    }
+    html += '</div>';
+  }
+  document.getElementById('popupBody').innerHTML = html;
+  document.getElementById('popupProgress').textContent = filled+' / 16 Felder gefüllt';
+}
+ch.postMessage({ type: 'request' });
+<\/script></body></html>`;
+}
+
+function syncPopup() {
+  _avatarChannel.postMessage({ type: 'update', personas: _personas, activeIdx: _activePersonaIdx });
+}
+
+// Listen for messages from popup
+_avatarChannel.onmessage = (e) => {
+  if (e.data.type === 'correct') correctAvatarField(e.data.field);
+  if (e.data.type === 'switch') switchPersona(e.data.idx);
+  if (e.data.type === 'request') syncPopup();
+};
 
 // Field mapping: JSON key → DOM id
 const AVATAR_FIELDS = {
@@ -1584,7 +1724,7 @@ function correctAvatarField(fieldKey) {
   const el = document.getElementById(AVATAR_FIELDS[fieldKey]);
   if (!el || !el.classList.contains('filled')) return;
   
-  const currentValue = _avatarData[fieldKey] || '';
+  const currentValue = getActivePersonaData()[fieldKey] || '';
   const label = AVATAR_LABELS[fieldKey] || fieldKey;
   
   // Build correction message and send directly to LLM
@@ -1610,19 +1750,26 @@ function correctAvatarField(fieldKey) {
 }
 
 function renderAvatarCard(data) {
-  _avatarData = { ..._avatarData, ...data };
+  _personas[_activePersonaIdx] = { ...(_personas[_activePersonaIdx] || {}), ...data };
+  const pData = _personas[_activePersonaIdx];
   let filled = 0;
   for (const [key, domId] of Object.entries(AVATAR_FIELDS)) {
     const el = document.getElementById(domId);
     if (!el) continue;
-    const val = _avatarData[key];
+    const val = pData[key];
     if (val && val.trim && val.trim() !== '' && val !== '?') {
       el.innerHTML = `<span class="af-icon">✅</span> <span class="af-value">${escapeHtml(val)}</span>`;
       el.classList.add('filled');
       filled++;
+    } else {
+      // Reset to unfilled state when switching personas
+      const label = AVATAR_LABELS[key] || key;
+      el.innerHTML = `<span class="af-icon">⏳</span> ${label}`;
+      el.classList.remove('filled');
     }
   }
   document.getElementById('avatarProgress').textContent = `${filled} / ${Object.keys(AVATAR_FIELDS).length} Felder gefüllt`;
+  syncPopup();
 }
 
 // Called from handleAdapterMessage on every assistant turn
