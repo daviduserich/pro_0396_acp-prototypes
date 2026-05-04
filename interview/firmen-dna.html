@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V2.0 — Post-Processing + Persistierung</span>
+  <span class="version">V2.1 — Post-Processing Fix + Extraction Upgrade</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -347,38 +347,51 @@ window.sendTextInput = function() {
   input.focus();
 };
 
-// ═══ POST-PROCESSING V2.2 (Port from interview.html) ═══
+// ═══ POST-PROCESSING V2.3 (Fixes mid-sentence replacement bug) ═══
 const TABOO_WORDS = ['genau', 'absolut', 'auf jeden fall', 'hervorragend', 'grossartig', 'wunderbar', 'ganz genau', 'definitiv'];
-const ACK_POOL = ['Okay', 'Alles klar', 'Spannend', 'Gut', 'Interessant', 'Hmm', 'Mhm', 'Aha', 'Klar', 'Notiert'];
-let _ackHistory = [];
+const ACK_POOL = ['Okay', 'Alles klar', 'Gut', 'Klar', 'Notiert'];
+let _lastAck = '';
+
+function pickAck() {
+  const pool = ACK_POOL.filter(a => a !== _lastAck);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  _lastAck = pick;
+  return pick;
+}
 
 function postProcessAgent(text) {
   let processed = text;
-  // 1. Taboo-Word replacement
+  // 1. Taboo-Word replacement — ONLY at sentence start (after . or beginning)
   TABOO_WORDS.forEach(tw => {
-    const re = new RegExp(`\\b${tw}\\b`, 'gi');
-    if (re.test(processed)) {
-      const replacement = ACK_POOL[Math.floor(Math.random() * ACK_POOL.length)];
-      processed = processed.replace(re, replacement);
+    // Match only when taboo word is at sentence start (after period+space, or at text start)
+    const reStart = new RegExp(`(^|[.!?]\\s+)${tw}([,\\s])`, 'gi');
+    if (reStart.test(processed)) {
+      const replacement = pickAck();
+      processed = processed.replace(reStart, `$1${replacement}$2`);
       console.log(`[PostProc] Taboo replaced: "${tw}" → "${replacement}"`);
     }
   });
-  // 2. Verstehe-Rotation: replace repeated "verstehe"
-  const versteheRe = /\bverstehe\b/gi;
-  const versteheAlts = ['Klar', 'Okay', 'Mhm', 'Gut', 'Aha'];
-  let vi = 0;
-  processed = processed.replace(versteheRe, () => {
-    const alt = versteheAlts[vi % versteheAlts.length];
-    vi++;
-    return alt;
+  // 2. Verstehe-Rotation — ONLY at sentence boundaries, not mid-sentence
+  const versteheStart = /(?:^|[.!?]\s+)(verstehe[,.]?\s)/gi;
+  processed = processed.replace(versteheStart, (match) => {
+    return match.replace(/verstehe[,.]?\s/i, pickAck() + '. ');
   });
-  // 3. Multi-question detection (warn in console)
-  const questionMarks = (processed.match(/\?/g) || []).length;
-  if (questionMarks > 1) {
-    console.warn(`[PostProc] ⚠️ ${questionMarks} Fragezeichen in einer Antwort — One-Question-Rule verletzt`);
+  // Also catch standalone "Ich verstehe" / "Das verstehe ich"
+  processed = processed.replace(/\b(ich verstehe|das verstehe ich|verstanden)[.,]?/gi, pickAck());
+  // 3. Multi-question detection (warn in console, strip extra questions)
+  const sentences = processed.split(/(?<=[.!?])\s+/);
+  const questionSentences = sentences.filter(s => s.includes('?'));
+  if (questionSentences.length > 1) {
+    console.warn(`[PostProc] ⚠️ ${questionSentences.length} Fragen — keeping only last`);
+    // Keep all non-question sentences + last question
+    const nonQ = sentences.filter(s => !s.includes('?'));
+    const lastQ = questionSentences[questionSentences.length - 1];
+    processed = [...nonQ, lastQ].join(' ').trim();
   }
   // 4. Danke-Stripping: remove excessive "danke" at start
   processed = processed.replace(/^(vielen )?danke[,!.]?\s*/i, '');
+  // 5. Clean up double spaces / artifacts
+  processed = processed.replace(/\s{2,}/g, ' ').trim();
   return processed;
 }
 
@@ -479,30 +492,59 @@ window.correctField = function(fieldKey) {
 
 async function maybeUpdateDnaCard() {
   try {
-    const msgs = document.querySelectorAll('#chatMessages .msg');
+    const msgs = document.querySelectorAll('#chatMessages .msg:not(.system)');
+    if (msgs.length < 3) return;
+    
+    // Build structured transcript with roles (not just text dump)
     let transcript = '';
-    msgs.forEach(m => { transcript += m.textContent + '\n'; });
+    msgs.forEach(m => {
+      const roleEl = m.querySelector('.role-label');
+      const role = roleEl?.textContent?.includes('Eusebia') ? 'AGENT' : 'KUNDE';
+      const text = m.textContent.replace(roleEl?.textContent || '', '').trim();
+      if (text) transcript += `${role}: ${text}\n`;
+    });
     if (transcript.length < 100) return;
     
-    const extractPrompt = `Analysiere dieses Gespraech und extrahiere die Firmen-DNA. Antworte NUR mit einem JSON-Objekt:
-{"hauptangebot":"...","umsatzstaerkstes":"...","zielmarkt":"...","preissegment":"...","usp":"...","auftragswert":"...","ausbauen":"...","nicht_mehr":"..."}
-Felder die nicht besprochen wurden: "?" setzen. Keine Erklaerungen, NUR JSON.
+    // Use FULL transcript (up to 12000 chars to stay in context window)
+    const transcriptForExtraction = transcript.length > 12000 
+      ? transcript.substring(0, 3000) + '\n...\n' + transcript.substring(transcript.length - 8000)
+      : transcript;
+    
+    const extractPrompt = `Du bist ein Daten-Extraktor. Analysiere das KOMPLETTE Gespraech und extrahiere die Firmen-DNA.
 
-GESPRAECH:
-${transcript.substring(transcript.length - 4000)}`;
+WICHTIG:
+- Extrahiere ALLES was besprochen wurde, auch wenn es am Anfang des Gespraeachs war
+- Wenn der Kunde Preise nennt (z.B. "295 pro Monat", "495 Enterprise"), extrahiere das als auftragswert
+- Wenn der Kunde sagt "B2B" oder "Firmen", extrahiere das als zielmarkt
+- Wenn der Kunde seine Alleinstellung erklaert, extrahiere das als usp
+- Felder die WIRKLICH nicht besprochen wurden: "?" setzen
+- Antworte NUR mit einem JSON-Objekt, KEINE Erklaerung
+
+JSON-Format:
+{"hauptangebot":"...","umsatzstaerkstes":"...","zielmarkt":"...","preissegment":"...","usp":"...","auftragswert":"...","ausbauen":"...","nicht_mehr":"..."}
+
+KOMPLETTES GESPRAECH:
+${transcriptForExtraction}`;
 
     const token = state._cachedToken;
-    if (!token) return;
+    if (!token) { console.warn('[DNA Extract] No token cached'); return; }
     
+    console.log(`[DNA Extract] Running extraction on ${transcript.length} chars, ${msgs.length} messages`);
     const r = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'grok-3-mini', messages: [{ role: 'user', content: extractPrompt }], temperature: 0.1 })
     });
     const d = await r.json();
+    if (d.error) { console.error('[DNA Extract] API Error:', d.error); return; }
     const raw = d.choices?.[0]?.message?.content || '';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) renderDnaCard(JSON.parse(jsonMatch[0]));
+    if (jsonMatch) {
+      const extracted = JSON.parse(jsonMatch[0]);
+      const filledCount = Object.values(extracted).filter(v => v && v !== '?').length;
+      console.log(`[DNA Extract] ✅ Extracted ${filledCount}/8 fields`);
+      renderDnaCard(extracted);
+    }
   } catch(e) { console.error('[DNA Extract]', e); }
 }
 
@@ -519,7 +561,10 @@ function buildSystemPrompt() {
   p += `5. VERBOTENE WOERTER: "genau", "absolut", "auf jeden Fall", "hervorragend", "grossartig", "wunderbar", "definitiv".\n`;
   p += `6. DANKE-STRIPPING: Beginne KEINE Antwort mit "Danke" oder "Vielen Dank". Steige direkt ein.\n`;
   p += `7. Wenn der Kunde vage antwortet, hake nach: "Kannst du das etwas konkreter machen?"\n`;
-  p += `8. ANERKENNUNGS-ROTATION: Wechsle zwischen Bestaetigungen ab. Nie 2x hintereinander dasselbe.\n\n`;
+  p += `8. ANERKENNUNGS-ROTATION: Wechsle zwischen Bestaetigungen ab. Nie 2x hintereinander dasselbe.\n`;
+  p += `9. STILLE-TOLERANZ: Wenn der Kunde schweigt, liest oder nachdenkt, WARTE STILL. Sage NICHTS. Kein \"Alles gut, nimm dir Zeit\", kein \"Sag Bescheid wenn du fertig bist\". EINFACH WARTEN. Der Kunde meldet sich wenn er bereit ist.\n`;
+  p += `10. ANTI-SCHWAFELN: Halte deine Antworten KURZ. Max 2 Saetze. Bestaetige kurz → naechste Frage. KEINE Wiederholungen, KEINE Zusammenfassungen zwischendurch.\n`;
+  p += `11. AKTIVES ZUHOEREN: Wenn der Kunde in einer Antwort mehrere Felder abdeckt (z.B. Preise UND Zielmarkt), registriere BEIDES intern und frage NICHT nochmal danach.\n\n`;
   
   p += `═══ DIE 8 PFLICHTFELDER ═══\n`;
   p += `Du musst ALLE 8 Felder abfragen. Fuehre intern eine Checkliste:\n\n`;
@@ -557,10 +602,9 @@ function buildSystemPrompt() {
   p += `- Nicht mehr anbieten: [Antwort]\n`;
   p += `Stimmt das so?"\n\n`;
   
-  p += `Nach Bestaetigung: "Super, damit haben wir ein vollstaendiges Bild eurer Angebotsstruktur. Danke!"\n`;
-  p += `Dann SOFORT sagen: "Du kannst jetzt den Stopp-Knopf druecken, dann werden alle Daten gespeichert."\n`;
-  p += `WICHTIG: Warte NICHT still. Wenn der Kunde "okay", "super", "danke" oder aehnliches sagt, antworte SOFORT freundlich und weise auf den Stopp-Knopf hin.\n`;
-  p += `Sage NIEMALS einfach nichts — Stille am Ende ist verwirrend fuer den Kunden.\n\n`;
+  p += `Nach Bestaetigung: "Super, damit haben wir alles. Du kannst jetzt den Stopp-Knopf druecken."\n`;
+  p += `DANACH: Sage NICHTS MEHR. Warte still. Der Kunde drueckt den Knopf.\n`;
+  p += `Wenn der Kunde noch eine Frage stellt, antworte kurz. Aber schwafle NICHT.\n\n`;
   
   p += `═══ KORREKTUR ═══\n`;
   p += `Wenn eine Nachricht mit [KORREKTUR-TRIGGER] beginnt, frage direkt: "Was stimmt hier nicht?" Korrigiere und mach weiter.\n`;
