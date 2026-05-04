@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V1.2</span>
+  <span class="version">V2.0 — Post-Processing + Persistierung</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -101,6 +101,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
   <div class="config-group"><label id="engineLabel">xAI/Grok</label></div>
   <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Starten</button>
   <button class="ctrl-btn danger" id="stopBtn" onclick="stopInterview()" style="display:none;">⏹ Stopp</button>
+  <button class="ctrl-btn" id="saveBtn" onclick="saveTranscript()" style="display:none;" title="Gespräch + DNA speichern">💾 Speichern</button>
 </div>
 
 <div class="main">
@@ -128,13 +129,21 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
         <div class="dna-field" id="df-nicht_mehr" onclick="correctField('nicht_mehr')"><span class="af-icon">⏳</span> Was NICHT mehr</div>
       </div>
       <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;" id="dnaProgress">0 / 8 Felder gefüllt</div>
+      <div id="dnaSaveStatus" style="margin-top:4px;font-size:10px;text-align:center;color:var(--yellow);">⚠️ Nicht gespeichert</div>
     </div>
     <!-- SESSION INFO -->
     <div class="sidebar-section">
       <div class="sidebar-title">📊 Session</div>
       <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="statusText"><span class="status-dot"></span> Bereit</span></div>
+      <div class="info-row"><span class="info-label">Turn</span><span class="info-value" id="turnCount">0</span></div>
       <div class="info-row"><span class="info-label">Nachrichten</span><span class="info-value" id="msgCount">0</span></div>
       <div class="info-row"><span class="info-label">Dauer</span><span class="info-value" id="duration">00:00</span></div>
+      <div id="turnProgress" style="margin-top:8px;"></div>
+    </div>
+    <!-- SESSIONS LIST -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">📜 Letzte Sessions</div>
+      <div id="sessionsList" style="font-size:11px;color:var(--text-muted);">Wird geladen...</div>
     </div>
   </div>
 
@@ -167,7 +176,8 @@ const state = {
   clientId: '', engine: 'xai', interactionMode: 'voice', ttsEnabled: true,
   isConnected: false, isRecording: false, adapter: null, sessionId: null,
   messageCount: 0, startTime: null, _lastUserMsg: null, _cachedToken: null,
-  dnaData: {}, _timerInterval: null, _researchContext: null
+  dnaData: {}, _timerInterval: null, _researchContext: null,
+  _agentTurnCount: 0, _dnaSaved: false, _iterationLabel: null
 };
 
 // ═══ SUPABASE HELPERS ═══
@@ -245,7 +255,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     sel.onchange = async () => {
       state.clientId = sel.value;
       document.getElementById('startBtn').disabled = !state.clientId;
-      if (state.clientId) await loadResearchContext(state.clientId);
+      if (state.clientId) {
+        await loadResearchContext(state.clientId);
+        await loadSessions(state.clientId);
+      }
     };
   } catch(e) { console.error('Clients laden:', e); }
   
@@ -334,7 +347,42 @@ window.sendTextInput = function() {
   input.focus();
 };
 
-// ═══ ADAPTER CALLBACKS ═══
+// ═══ POST-PROCESSING V2.2 (Port from interview.html) ═══
+const TABOO_WORDS = ['genau', 'absolut', 'auf jeden fall', 'hervorragend', 'grossartig', 'wunderbar', 'ganz genau', 'definitiv'];
+const ACK_POOL = ['Okay', 'Alles klar', 'Spannend', 'Gut', 'Interessant', 'Hmm', 'Mhm', 'Aha', 'Klar', 'Notiert'];
+let _ackHistory = [];
+
+function postProcessAgent(text) {
+  let processed = text;
+  // 1. Taboo-Word replacement
+  TABOO_WORDS.forEach(tw => {
+    const re = new RegExp(`\\b${tw}\\b`, 'gi');
+    if (re.test(processed)) {
+      const replacement = ACK_POOL[Math.floor(Math.random() * ACK_POOL.length)];
+      processed = processed.replace(re, replacement);
+      console.log(`[PostProc] Taboo replaced: "${tw}" → "${replacement}"`);
+    }
+  });
+  // 2. Verstehe-Rotation: replace repeated "verstehe"
+  const versteheRe = /\bverstehe\b/gi;
+  const versteheAlts = ['Klar', 'Okay', 'Mhm', 'Gut', 'Aha'];
+  let vi = 0;
+  processed = processed.replace(versteheRe, () => {
+    const alt = versteheAlts[vi % versteheAlts.length];
+    vi++;
+    return alt;
+  });
+  // 3. Multi-question detection (warn in console)
+  const questionMarks = (processed.match(/\?/g) || []).length;
+  if (questionMarks > 1) {
+    console.warn(`[PostProc] ⚠️ ${questionMarks} Fragezeichen in einer Antwort — One-Question-Rule verletzt`);
+  }
+  // 4. Danke-Stripping: remove excessive "danke" at start
+  processed = processed.replace(/^(vielen )?danke[,!.]?\s*/i, '');
+  return processed;
+}
+
+// ═══ ADAPTER CALLBACKS (with Post-Processing) ═══
 function handleAdapterMessage(role, content) {
   showTyping(false);
   let displayContent = content;
@@ -351,16 +399,36 @@ function handleAdapterMessage(role, content) {
   
   if (role === 'assistant') {
     state._lastUserMsg = null;
-    _agentTurnCount++;
-    if (_agentTurnCount % 2 === 0) maybeUpdateDnaCard();
+    state._agentTurnCount++;
+    // Post-Processing V2.2
+    displayContent = postProcessAgent(content);
+    // Update turn counter in sidebar
+    document.getElementById('turnCount').textContent = state._agentTurnCount;
+    updateTurnProgress();
+    // DNA extraction every 2 turns
+    if (state._agentTurnCount % 2 === 0) maybeUpdateDnaCard();
   }
   
   addMessage(role, displayContent);
 }
 
+function updateTurnProgress() {
+  const maxTurns = 12; // 8-field interview is ~10-12 turns
+  const pct = Math.min(100, Math.round((state._agentTurnCount / maxTurns) * 100));
+  const el = document.getElementById('turnProgress');
+  if (!el) return;
+  const warning = state._agentTurnCount >= 10 ? `<div style="font-size:10px;color:var(--yellow);margin-top:4px;">⚠️ Bald zusammenfassen!</div>` : '';
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Turn ${state._agentTurnCount}/${maxTurns}</span>
+      <div style="flex:1;height:4px;background:var(--bg-hover);border-radius:2px;overflow:hidden;">
+        <div style="height:100%;background:var(--accent);transition:width 0.5s ease;width:${pct}%;"></div>
+      </div>
+    </div>${warning}`;
+}
+
 // ═══ DNA CARD ═══
 let _dnaCardVisible = true;
-let _agentTurnCount = 0;
 
 window.toggleDnaCard = function() {
   _dnaCardVisible = !_dnaCardVisible;
@@ -386,6 +454,11 @@ function renderDnaCard(data, source) {
     }
   }
   document.getElementById('dnaProgress').textContent = `${filled} / 8 Felder gefüllt`;
+  // Update save indicator
+  if (filled > 0 && !state._dnaSaved) {
+    const ss = document.getElementById('dnaSaveStatus');
+    if (ss) { ss.textContent = '⚠️ Nicht gespeichert — "Speichern" klicken'; ss.style.color = 'var(--yellow)'; }
+  }
   // Auto-refresh pop-out window if open
   if (_popOutWindow && !_popOutWindow.closed) refreshPopOut();
 }
@@ -440,11 +513,13 @@ function buildSystemPrompt() {
   
   p += `═══ WICHTIGE REGELN ═══\n`;
   p += `1. Du sprichst IMMER Deutsch (Schweizer Stil, natuerlich, kein Hochdeutsch-Pathos).\n`;
-  p += `2. Du fragst EINE Frage auf einmal. Kurz, direkt, konkret.\n`;
+  p += `2. Du fragst EINE Frage auf einmal. Kurz, direkt, konkret. NIEMALS zwei Fragen in einem Satz.\n`;
   p += `3. Du bist neugierig aber effizient — kein Smalltalk.\n`;
-  p += `4. Du bestaetigst Antworten kurz (variiere: "Spannend", "Okay", "Alles klar", "Verstanden") und stellst die naechste Frage.\n`;
-  p += `5. VERBOTENE WOERTER: "genau", "absolut", "auf jeden Fall", "hervorragend", "grossartig", "wunderbar".\n`;
-  p += `6. Wenn der Kunde vage antwortet, hake nach. Beispiel: "Kannst du das etwas konkreter machen?"\n\n`;
+  p += `4. VERSTEHE-VERBOT: Sage NIEMALS "verstehe", "das verstehe ich" oder "ich verstehe". Nutze stattdessen Varianten: "Okay", "Klar", "Alles klar", "Mhm", "Gut".\n`;
+  p += `5. VERBOTENE WOERTER: "genau", "absolut", "auf jeden Fall", "hervorragend", "grossartig", "wunderbar", "definitiv".\n`;
+  p += `6. DANKE-STRIPPING: Beginne KEINE Antwort mit "Danke" oder "Vielen Dank". Steige direkt ein.\n`;
+  p += `7. Wenn der Kunde vage antwortet, hake nach: "Kannst du das etwas konkreter machen?"\n`;
+  p += `8. ANERKENNUNGS-ROTATION: Wechsle zwischen Bestaetigungen ab. Nie 2x hintereinander dasselbe.\n\n`;
   
   p += `═══ DIE 8 PFLICHTFELDER ═══\n`;
   p += `Du musst ALLE 8 Felder abfragen. Fuehre intern eine Checkliste:\n\n`;
@@ -599,10 +674,23 @@ window.startInterview = async function() {
     state.adapter = adapter;
     await adapter.connect(tokenData.xai_token, buildSystemPrompt());
     
+    // Create session in Supabase
+    state.sessionId = crypto.randomUUID();
+    try {
+      await fetch(`${SB_URL}/rest/v1/interview_sessions`, {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: state.sessionId, client_id: state.clientId, module_id: '371af773-ab50-4d29-b70e-3b34dd9d7278', status: 'active' })
+      });
+    } catch(e) { console.warn('[Session] Create failed:', e); }
+    
     // Audio-Wiedergabe einschalten (Voice-Modus)
     if (state.adapter.setAudioPlaybackEnabled) {
       state.adapter.setAudioPlaybackEnabled(state.interactionMode === 'voice');
     }
+    
+    // Show save button
+    document.getElementById('saveBtn').style.display = '';
     
     // Auto-Mic nach 3s Bot-Greeting
     setTimeout(() => {
@@ -659,7 +747,7 @@ window.stopInterview = async function() {
   addMessage('system', '🔄 Finale Daten-Extraktion...');
   await maybeUpdateDnaCard();
   
-  // Save to Supabase
+  // Save to Supabase (offering_structure)
   const filledKeys = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?' && k !== '_updated');
   if (filledKeys.length > 0 && state.clientId) {
     addMessage('system', `💾 Speichere Firmen-DNA (${filledKeys.length}/8 Felder)...`);
@@ -670,6 +758,8 @@ window.stopInterview = async function() {
       addMessage('system', '⚠️ Speichern fehlgeschlagen — JSON in Konsole gesichert.');
     }
   }
+  // Also save transcript
+  await saveTranscript();
   console.log('[Firmen-DNA] Final:', JSON.stringify(state.dnaData, null, 2));
 };
 
@@ -765,6 +855,106 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
   w.document.open();
   w.document.write(html);
   w.document.close();
+}
+
+// ═══ TRANSCRIPT SAVE + SESSION MANAGEMENT (V2.0) ═══
+function generateIterationLabel() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const quarter = 'Q' + Math.ceil((now.getMonth() + 1) / 3);
+  const hasHistory = document.querySelectorAll('#sessionsList div[data-sid]').length > 0;
+  return `${year}-${quarter} ${hasHistory ? 'Update' : 'Initial'}`;
+}
+
+async function saveTranscript() {
+  if (!state.sessionId) { addMessage('system', '❌ Keine aktive Session.'); return; }
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+  
+  const msgs = [];
+  document.querySelectorAll('#chatMessages .msg').forEach(el => {
+    const roleLabel = el.querySelector('.role-label')?.textContent || '';
+    let role = 'system';
+    if (roleLabel.includes('Eusebia')) role = 'assistant';
+    if (roleLabel.includes('Du')) role = 'user';
+    const text = el.textContent.replace(roleLabel, '').trim();
+    if (text) msgs.push({ role, content: text, timestamp: new Date().toISOString() });
+  });
+  
+  const payload = {
+    transcript: msgs,
+    persona_data: [state.dnaData],
+    iteration_label: state._iterationLabel || generateIterationLabel(),
+    status: 'completed',
+    updated_at: new Date().toISOString()
+  };
+  
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/interview_sessions?id=eq.${state.sessionId}`, {
+      method: 'PATCH',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      const filledCount = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?' && k !== '_updated').length;
+      addMessage('system', `✅ Gespeichert: ${msgs.length} Nachrichten, ${filledCount}/8 Felder`);
+      state._dnaSaved = true;
+      const ss = document.getElementById('dnaSaveStatus');
+      if (ss) { ss.textContent = '✅ In Supabase gespeichert'; ss.style.color = 'var(--green)'; }
+      if (saveBtn) { saveBtn.textContent = '✅ Gespeichert'; saveBtn.style.background = 'rgba(34,197,94,0.25)'; }
+      setTimeout(() => { if (saveBtn) { saveBtn.textContent = '💾 Speichern'; saveBtn.style.background = ''; saveBtn.disabled = false; } }, 5000);
+    } else {
+      addMessage('system', `⚠️ Speichern fehlgeschlagen: HTTP ${r.status}`);
+      if (saveBtn) { saveBtn.textContent = '❌ Fehler'; setTimeout(() => { saveBtn.textContent = '💾 Speichern'; saveBtn.disabled = false; }, 3000); }
+    }
+  } catch(e) {
+    addMessage('system', `❌ Fehler: ${e.message}`);
+    if (saveBtn) { saveBtn.textContent = '💾 Speichern'; saveBtn.disabled = false; }
+  }
+}
+
+async function loadSessions(clientId) {
+  const el = document.getElementById('sessionsList');
+  if (!el) return;
+  try {
+    const sessions = await sbFetch('interview_sessions', `?client_id=eq.${clientId}&module_id=eq.371af773-ab50-4d29-b70e-3b34dd9d7278&select=id,created_at,status,iteration_label&order=created_at.desc&limit=5`);
+    if (!sessions.length) { el.innerHTML = '<span style="color:var(--text-muted);">Keine Sessions</span>'; return; }
+    el.innerHTML = sessions.map(s => {
+      const date = new Date(s.created_at).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+      const label = s.iteration_label || '';
+      const statusIcon = s.status === 'completed' ? '✅' : s.status === 'active' ? '🟢' : '⏸️';
+      return `<div data-sid="${s.id}" style="padding:4px 0;cursor:pointer;border-bottom:1px solid var(--border);" onclick="resumeSession('${s.id}')">${statusIcon} ${date} ${label}</div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<span style="color:var(--red);">Fehler</span>'; }
+}
+
+async function resumeSession(sessionId) {
+  addMessage('system', `Session ${sessionId.substring(0,8)}... wird geladen...`);
+  try {
+    const sessions = await sbFetch('interview_sessions', `?id=eq.${sessionId}&select=id,transcript,client_id,persona_data,iteration_label`);
+    if (!sessions.length) { addMessage('system', '❌ Session nicht gefunden.'); return; }
+    const session = sessions[0];
+    state.sessionId = sessionId;
+    
+    // Restore DNA data
+    if (session.persona_data && session.persona_data.length > 0 && Object.keys(session.persona_data[0]).length > 0) {
+      renderDnaCard(session.persona_data[0], 'existing');
+      addMessage('system', `🏢 DNA-Steckbrief wiederhergestellt.`);
+      state._dnaSaved = true;
+      const ss = document.getElementById('dnaSaveStatus');
+      if (ss) { ss.textContent = '✅ In Supabase gespeichert'; ss.style.color = 'var(--green)'; }
+    }
+    if (session.iteration_label) state._iterationLabel = session.iteration_label;
+    
+    // Replay transcript
+    if (session.transcript && session.transcript.length > 0) {
+      session.transcript.forEach(msg => { if (msg.role !== 'system') addMessage(msg.role, msg.content); });
+      addMessage('system', `📜 ${session.transcript.length} Nachrichten geladen.`);
+    }
+    
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startBtn').textContent = '▶ Fortsetzen';
+  } catch(e) { addMessage('system', `❌ Laden fehlgeschlagen: ${e.message}`); }
 }
 </script>
 </body>
