@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V2.3 — Extraktion-Debugging + Lock</span>
+  <span class="version">V2.4 — Live-Status im Steckbrief</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -476,6 +476,26 @@ function renderDnaCard(data, source) {
   if (_popOutWindow && !_popOutWindow.closed) refreshPopOut();
 }
 
+// Push status text to both sidebar AND pop-out
+function setExtractionStatus(text, type) {
+  // type: 'working' | 'success' | 'error' | 'idle'
+  const prog = document.getElementById('dnaProgress');
+  if (prog) {
+    prog.textContent = text;
+    prog.style.color = type === 'working' ? 'var(--yellow)' : type === 'error' ? '#ef4444' : 'var(--text-muted)';
+  }
+  // Push to pop-out
+  if (_popOutWindow && !_popOutWindow.closed) {
+    try {
+      const statusEl = _popOutWindow.document.getElementById('extractionStatus');
+      if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.className = 'status-bar ' + (type || 'idle');
+      }
+    } catch(e) { /* cross-origin */ }
+  }
+}
+
 window.correctField = function(fieldKey) {
   if (!state.isConnected) return;
   const el = document.getElementById(DNA_FIELDS[fieldKey]);
@@ -508,9 +528,8 @@ async function maybeUpdateDnaCard() {
     const msgs = document.querySelectorAll('#chatMessages .msg:not(.system)');
     if (msgs.length < 3) { _extractionRunning = false; return; }
     
-    // Show extraction status visually
-    const prog = document.getElementById('dnaProgress');
-    if (prog) prog.textContent = `🔄 Extrahiere... (Turn ${state._agentTurnCount})`;
+    // Show extraction status visually — both sidebar AND pop-out
+    setExtractionStatus(`🔄 Extrahiere... (Turn ${state._agentTurnCount})`, 'working');
     
     // Build structured transcript with roles
     let transcript = '';
@@ -548,7 +567,7 @@ ${transcriptForExtraction}`;
     const token = state._cachedToken;
     if (!token) { 
       console.error('[DNA Extract] ❌ No token cached!');
-      if (prog) prog.textContent = `❌ Kein Token — Extraktion fehlgeschlagen`;
+      setExtractionStatus('❌ Kein Token — Extraktion fehlgeschlagen', 'error');
       _extractionRunning = false; 
       return; 
     }
@@ -565,7 +584,7 @@ ${transcriptForExtraction}`;
     if (!r.ok) {
       const errText = await r.text();
       console.error(`[DNA Extract #${extractionId}] ❌ HTTP ${r.status}:`, errText.substring(0, 200));
-      if (prog) prog.textContent = `❌ Extraktion fehlgeschlagen (HTTP ${r.status})`;
+      setExtractionStatus(`❌ Extraktion fehlgeschlagen (HTTP ${r.status})`, 'error');
       _extractionRunning = false;
       return;
     }
@@ -573,7 +592,7 @@ ${transcriptForExtraction}`;
     const d = await r.json();
     if (d.error) { 
       console.error(`[DNA Extract #${extractionId}] ❌ API Error:`, d.error);
-      if (prog) prog.textContent = `❌ API-Fehler bei Extraktion`;
+      setExtractionStatus('❌ API-Fehler bei Extraktion', 'error');
       _extractionRunning = false;
       return; 
     }
@@ -586,12 +605,11 @@ ${transcriptForExtraction}`;
       renderDnaCard(extracted);
     } else {
       console.warn(`[DNA Extract #${extractionId}] ⚠️ No JSON in response:`, raw.substring(0, 200));
-      if (prog) prog.textContent = `⚠️ Keine Daten extrahiert`;
+      setExtractionStatus('⚠️ Keine Daten extrahiert', 'error');
     }
   } catch(e) { 
     console.error('[DNA Extract] ❌ Exception:', e);
-    const prog = document.getElementById('dnaProgress');
-    if (prog) prog.textContent = `❌ Fehler: ${e.message}`;
+    setExtractionStatus(`❌ Fehler: ${e.message}`, 'error');
   } finally {
     _extractionRunning = false;
   }
@@ -919,7 +937,11 @@ h2{font-size:13px;color:#93c5fd;text-transform:uppercase;margin:16px 0 8px;lette
 .field.filled{border-left-color:#22c55e;background:rgba(34,197,94,0.05);}
 .field .label{color:#93c5fd;font-weight:600;font-size:12px;}
 .field .value{color:#e0e0e0;margin-top:2px;}
-.progress{text-align:center;margin-top:16px;font-size:12px;color:#888;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;}
+.status-bar{text-align:center;margin-top:16px;font-size:13px;color:#888;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;transition:all 0.3s ease;font-weight:500;}
+.status-bar.working{color:#eab308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);animation:statusPulse 1.5s infinite;}
+.status-bar.error{color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);}
+.status-bar.idle{color:#888;border:1px solid transparent;}
+@keyframes statusPulse{0%,100%{opacity:1;}50%{opacity:0.6;}}
 footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
 </style></head><body>`;
   html += `<h1>🏢 Angebots-Steckbrief <span class="live">● LIVE</span></h1>`;
@@ -942,7 +964,7 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
       html += `</div>`;
     }
   }
-  html += `<div class="progress">✅ ${filled} / 8 Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
+  html += `<div id="extractionStatus" class="status-bar idle">✅ ${filled} / 8 Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
   html += `<footer>ACP Produkte & Positionierung</footer>`;
   html += `</body></html>`;
   w.document.open();
