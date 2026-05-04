@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V2.1 — Post-Processing Fix + Extraction Upgrade</span>
+  <span class="version">V2.2 — Live-Extraktion jede Turn</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -418,8 +418,8 @@ function handleAdapterMessage(role, content) {
     // Update turn counter in sidebar
     document.getElementById('turnCount').textContent = state._agentTurnCount;
     updateTurnProgress();
-    // DNA extraction every 2 turns
-    if (state._agentTurnCount % 2 === 0) maybeUpdateDnaCard();
+    // DNA extraction EVERY turn (was: every 2 turns — too slow)
+    maybeUpdateDnaCard();
   }
   
   addMessage(role, displayContent);
