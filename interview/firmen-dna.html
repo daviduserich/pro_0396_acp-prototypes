@@ -962,10 +962,14 @@ h1{font-size:20px;margin-bottom:16px;color:#60a5fa;display:flex;align-items:cent
 h1 .live{font-size:10px;background:#22c55e;color:#000;padding:2px 8px;border-radius:10px;animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
 h2{font-size:13px;color:#93c5fd;text-transform:uppercase;margin:16px 0 8px;letter-spacing:0.5px;}
-.field{padding:8px 12px;margin:4px 0;border-left:3px solid #333;font-size:13px;line-height:1.5;border-radius:0 6px 6px 0;background:rgba(255,255,255,0.03);transition:all 0.3s;}
+.field{padding:8px 12px;margin:4px 0;border-left:3px solid #333;font-size:13px;line-height:1.5;border-radius:0 6px 6px 0;background:rgba(255,255,255,0.03);transition:all 0.3s;cursor:pointer;}
+.field:hover{background:rgba(96,165,250,0.08);border-left-color:#60a5fa;}
 .field.filled{border-left-color:#22c55e;background:rgba(34,197,94,0.05);}
+.field.filled:hover{background:rgba(34,197,94,0.12);}
 .field .label{color:#93c5fd;font-weight:600;font-size:12px;}
 .field .value{color:#e0e0e0;margin-top:2px;}
+.field .hint{font-size:10px;color:#555;margin-top:2px;font-style:italic;display:none;}
+.field:hover .hint{display:block;}
 .status-bar{text-align:center;margin-top:16px;font-size:13px;color:#888;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;transition:all 0.3s ease;font-weight:500;}
 .status-bar.working{color:#eab308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);animation:statusPulse 1.5s infinite;}
 .status-bar.error{color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);}
@@ -987,9 +991,10 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
       const label = DNA_LABELS[key] || key;
       const hasFill = val && val !== '?';
       if (hasFill) filled++;
-      html += `<div class="field ${hasFill ? 'filled' : ''}">`;
+      html += `<div class="field ${hasFill ? 'filled' : ''}" onclick="window.opener && window.opener.correctField('${key}')">`;
       html += `<div class="label">${label}</div>`;
       html += `<div class="value">${hasFill ? val : '<span style="color:#555">— noch offen —</span>'}</div>`;
+      html += `<div class="hint">🖱️ Klicken zum Korrigieren</div>`;
       html += `</div>`;
     }
   }
