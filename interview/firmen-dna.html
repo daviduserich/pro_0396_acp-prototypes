@@ -93,9 +93,9 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
   <div class="config-group"><label>Modus</label>
     <div class="mode-toggle">
-      <button class="mode-btn" data-mode="voice" onclick="setMode('voice')">🔊 Voice</button>
-      <button class="mode-btn active" data-mode="hybrid" onclick="setMode('hybrid')">⌨️ Hybrid</button>
-      <button class="mode-btn" data-mode="read" onclick="setMode('read')">📖 Lesen</button>
+      <button class="mode-btn" data-mode="voice" onclick="setMode('voice')" title="Nur Sprache: Du sprichst, Eusebia antwortet per Audio. Kein Textfeld.">🔊 Voice</button>
+      <button class="mode-btn active" data-mode="hybrid" onclick="setMode('hybrid')" title="Sprache + Text: Du kannst sprechen ODER tippen. Eusebia antwortet per Audio.">⌨️ Hybrid</button>
+      <button class="mode-btn" data-mode="read" onclick="setMode('read')" title="Nur Text: Du tippst, Eusebia antwortet schriftlich. Kein Audio.">📖 Lesen</button>
     </div>
   </div>
   <div class="config-group"><label id="engineLabel">xAI/Grok</label></div>
@@ -176,17 +176,33 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const N8N_TOKEN_URL = 'https://n8n-mxs.com/webhook/interview-token';
 
 async function getToken() {
-  const r = await fetch(N8N_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: state.clientId,
-      module_id: '371af773-ab50-4d29-b70e-3b34dd9d7278',
-      engine_type: 'xai',
-    })
-  });
-  if (!r.ok) throw new Error(`Token HTTP ${r.status}`);
-  return await r.json();
+  try {
+    const r = await fetch(N8N_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: state.clientId,
+        module_id: '371af773-ab50-4d29-b70e-3b34dd9d7278',
+        engine_type: 'xai',
+      })
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error('[Token] HTTP Error:', r.status, txt);
+      throw new Error(`Token HTTP ${r.status}: ${txt.substring(0, 100)}`);
+    }
+    const txt = await r.text();
+    if (!txt || txt.trim() === '') {
+      console.error('[Token] Empty response body');
+      throw new Error('Token-Server liefert leere Antwort. n8n-Workflow prüfen!');
+    }
+    return JSON.parse(txt);
+  } catch(e) {
+    if (e.message.includes('JSON')) {
+      console.error('[Token] JSON parse error — n8n webhook likely returned HTML or empty response');
+    }
+    throw e;
+  }
 }
 
 async function sbFetch(table, query='') {
