@@ -956,6 +956,13 @@ async function startInterview() {
   document.getElementById('sessionStatus').innerHTML = '<span class="status-dot active"></span> Verbinde...';
   renderTopics();
 
+  // ─── SAFETY: Kill any existing session first (prevents zombie billing) ───
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Interview] ⚠️ Killing existing adapter before new session');
+    await state.adapter.disconnect();
+    state.adapter = null;
+  }
+
   // Create adapter based on engine selection
   const adapterOpts = {
     onMessage: handleAdapterMessage,
@@ -1930,6 +1937,20 @@ function extractAvatarRegex(msgs) {
     console.log('[Avatar] 🔄 Updated via regex fallback');
   }
 }
+
+// ─── SAFETY: Auto-disconnect on page close/refresh (prevents zombie xAI billing) ───
+window.addEventListener('beforeunload', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Interview] 🛑 beforeunload: Closing xAI WebSocket');
+    state.adapter.disconnect();
+  }
+});
+window.addEventListener('pagehide', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Interview] 🛑 pagehide: Closing xAI WebSocket');
+    state.adapter.disconnect();
+  }
+});
 
 // ─── Boot ───
 document.addEventListener('DOMContentLoaded', init);
