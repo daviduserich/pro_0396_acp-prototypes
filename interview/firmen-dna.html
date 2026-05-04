@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V2.4 — Live-Status im Steckbrief</span>
+  <span class="version">V2.5 — Timestamps + Extraction-Freeze + Sub-Felder</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -117,18 +117,20 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
       </div>
       <div id="dnaCardBody">
         <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin-bottom:4px;text-transform:uppercase;">A. Kerngeschäft</div>
-        <div class="dna-field" id="df-hauptangebot" onclick="correctField('hauptangebot')"><span class="af-icon">⏳</span> Hauptangebot</div>
+        <div class="dna-field" id="df-hauptangebot_1" onclick="correctField('hauptangebot_1')"><span class="af-icon">⏳</span> Angebot 1</div>
+        <div class="dna-field" id="df-hauptangebot_2" onclick="correctField('hauptangebot_2')"><span class="af-icon">⏳</span> Angebot 2</div>
+        <div class="dna-field" id="df-hauptangebot_3" onclick="correctField('hauptangebot_3')"><span class="af-icon">⏳</span> Angebot 3</div>
         <div class="dna-field" id="df-umsatzstaerkstes" onclick="correctField('umsatzstaerkstes')"><span class="af-icon">⏳</span> Umsatzstärkstes</div>
         <div class="dna-field" id="df-zielmarkt" onclick="correctField('zielmarkt')"><span class="af-icon">⏳</span> Zielmarkt</div>
         <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">B. Positionierung</div>
         <div class="dna-field" id="df-preissegment" onclick="correctField('preissegment')"><span class="af-icon">⏳</span> Preissegment</div>
         <div class="dna-field" id="df-usp" onclick="correctField('usp')"><span class="af-icon">⏳</span> USP</div>
-        <div class="dna-field" id="df-auftragswert" onclick="correctField('auftragswert')"><span class="af-icon">⏳</span> Auftragswert</div>
+        <div class="dna-field" id="df-auftragswert" onclick="correctField('auftragswert')"><span class="af-icon">⏳</span> Auftragswert / Pakete</div>
         <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">C. Strategie</div>
         <div class="dna-field" id="df-ausbauen" onclick="correctField('ausbauen')"><span class="af-icon">⏳</span> Ausbauen/Verändern</div>
         <div class="dna-field" id="df-nicht_mehr" onclick="correctField('nicht_mehr')"><span class="af-icon">⏳</span> Was NICHT mehr</div>
       </div>
-      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;" id="dnaProgress">0 / 8 Felder gefüllt</div>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;" id="dnaProgress">0 / 10 Felder gefüllt</div>
       <div id="dnaSaveStatus" style="margin-top:4px;font-size:10px;text-align:center;color:var(--yellow);">⚠️ Nicht gespeichert</div>
     </div>
     <!-- SESSION INFO -->
@@ -292,17 +294,27 @@ async function loadResearchContext(clientId) {
 
 // ═══ DNA FIELDS ═══
 const DNA_FIELDS = {
-  hauptangebot: 'df-hauptangebot', umsatzstaerkstes: 'df-umsatzstaerkstes',
+  hauptangebot_1: 'df-hauptangebot_1', hauptangebot_2: 'df-hauptangebot_2', hauptangebot_3: 'df-hauptangebot_3',
+  umsatzstaerkstes: 'df-umsatzstaerkstes',
   zielmarkt: 'df-zielmarkt', preissegment: 'df-preissegment',
   usp: 'df-usp', auftragswert: 'df-auftragswert',
   ausbauen: 'df-ausbauen', nicht_mehr: 'df-nicht_mehr'
 };
 const DNA_LABELS = {
-  hauptangebot:'Hauptangebot', umsatzstaerkstes:'Umsatzstärkstes Angebot',
+  hauptangebot_1:'Angebot 1', hauptangebot_2:'Angebot 2', hauptangebot_3:'Angebot 3',
+  umsatzstaerkstes:'Umsatzstärkstes Angebot',
   zielmarkt:'Zielmarkt', preissegment:'Preissegment',
-  usp:'USP/Alleinstellung', auftragswert:'Typischer Auftragswert',
+  usp:'USP/Alleinstellung', auftragswert:'Auftragswert / Pakete',
   ausbauen:'Ausbauen/Verändern', nicht_mehr:'Was NICHT mehr'
 };
+const DNA_FIELD_COUNT = 10; // 3 Angebote + 7 andere Felder
+
+// Activity log for analytics
+const _activityLog = [];
+function logActivity(event, data) {
+  _activityLog.push({ ts: new Date().toISOString(), event, ...data });
+  console.log(`[Activity] ${event}`, data || '');
+}
 
 // ═══ CHAT ═══
 function addMessage(role, content) {
@@ -311,12 +323,14 @@ function addMessage(role, content) {
   const container = document.getElementById('chatMessages');
   const msg = document.createElement('div');
   msg.className = `msg ${role}`;
+  msg.dataset.timestamp = new Date().toISOString(); // REAL timestamp per message
   const label = role === 'assistant' ? '🤖 Eusebia' : role === 'user' ? '👤 Du' : '📌 System';
   msg.innerHTML = `<div class="role-label">${label}</div>${escapeHtml(content)}`;
   container.appendChild(msg);
   container.scrollTop = container.scrollHeight;
   state.messageCount++;
   document.getElementById('msgCount').textContent = state.messageCount;
+  logActivity('message', { role, len: content.length });
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
@@ -466,7 +480,7 @@ function renderDnaCard(data, source) {
       el.innerHTML = `<span class="af-icon">⏳</span> <span style="color:var(--text-muted);">${escapeHtml(label)}</span>`;
     }
   }
-  document.getElementById('dnaProgress').textContent = `${filled} / 8 Felder gefüllt`;
+  document.getElementById('dnaProgress').textContent = `${filled} / ${DNA_FIELD_COUNT} Felder gefüllt`;
   // Update save indicator
   if (filled > 0 && !state._dnaSaved) {
     const ss = document.getElementById('dnaSaveStatus');
@@ -514,6 +528,11 @@ let _extractionRunning = false;
 let _extractionCount = 0;
 
 async function maybeUpdateDnaCard() {
+  // Freeze check: no extraction after stop (prevents ghost-updates)
+  if (state._extractionFrozen) {
+    console.log('[DNA Extract] 🧲 Frozen — skipping (post-stop)');
+    return;
+  }
   // Lock: prevent parallel extraction calls
   if (_extractionRunning) {
     console.log('[DNA Extract] ⏳ Skipping — previous extraction still running');
@@ -552,14 +571,15 @@ async function maybeUpdateDnaCard() {
 
 WICHTIG:
 - Extrahiere ALLES was besprochen wurde, auch wenn es am Anfang des Gespraeachs war
-- Wenn der Kunde Preise nennt (z.B. "295 pro Monat", "495 Enterprise"), extrahiere das als auftragswert
+- hauptangebot_1/2/3: Jedes Angebot/Produkt einzeln auflisten. Wenn der Kunde z.B. drei Bereiche nennt, wird jeder ein eigener Eintrag. Nicht alles in ein Feld packen!
+- auftragswert: Alle Preis-Infos strukturiert erfassen (Paketnamen + Preise)
 - Wenn der Kunde sagt "B2B" oder "Firmen", extrahiere das als zielmarkt
 - Wenn der Kunde seine Alleinstellung erklaert, extrahiere das als usp
 - Felder die WIRKLICH nicht besprochen wurden: "?" setzen
 - Antworte NUR mit einem JSON-Objekt, KEINE Erklaerung
 
 JSON-Format:
-{"hauptangebot":"...","umsatzstaerkstes":"...","zielmarkt":"...","preissegment":"...","usp":"...","auftragswert":"...","ausbauen":"...","nicht_mehr":"..."}
+{"hauptangebot_1":"Erstes Angebot/Produkt","hauptangebot_2":"Zweites Angebot/Produkt","hauptangebot_3":"Drittes Angebot/Produkt oder ?","umsatzstaerkstes":"...","zielmarkt":"...","preissegment":"...","usp":"...","auftragswert":"...","ausbauen":"...","nicht_mehr":"..."}
 
 KOMPLETTES GESPRAECH:
 ${transcriptForExtraction}`;
@@ -601,7 +621,8 @@ ${transcriptForExtraction}`;
     if (jsonMatch) {
       const extracted = JSON.parse(jsonMatch[0]);
       const filledCount = Object.values(extracted).filter(v => v && v !== '?').length;
-      console.log(`[DNA Extract #${extractionId}] ✅ Extracted ${filledCount}/8 fields`);
+      console.log(`[DNA Extract #${extractionId}] ✅ Extracted ${filledCount}/${DNA_FIELD_COUNT} fields`);
+      logActivity('extraction_done', { id: extractionId, filled: filledCount, turn: state._agentTurnCount });
       renderDnaCard(extracted);
     } else {
       console.warn(`[DNA Extract #${extractionId}] ⚠️ No JSON in response:`, raw.substring(0, 200));
@@ -635,7 +656,7 @@ function buildSystemPrompt() {
   
   p += `═══ DIE 8 PFLICHTFELDER ═══\n`;
   p += `Du musst ALLE 8 Felder abfragen. Fuehre intern eine Checkliste:\n\n`;
-  p += `□ hauptangebot — "Was sind eure Hauptprodukte oder Dienstleistungen?"\n`;
+  p += `□ hauptangebot — "Was sind eure Hauptprodukte oder Dienstleistungen?" WICHTIG: Wenn der Kunde MEHRERE Angebote/Bereiche nennt, merke dir jeden einzeln als Angebot 1, Angebot 2, Angebot 3. Beziehe dich in der Zusammenfassung darauf mit "Angebot 1:", "Angebot 2:", "Angebot 3:". So kann der Kunde spaeter gezielt korrigieren.\n`;
   p += `□ umsatzstaerkstes — "Womit verdient ihr am meisten Geld? Was ist euer staerkstes Standbein?"\n`;
   p += `□ zielmarkt — "Wer sind eure Kunden — eher Firmen (B2B) oder Endkunden (B2C)?"\n`;
   p += `□ preissegment — "Seid ihr eher im Premium-, Mittel- oder Budget-Segment positioniert?"\n`;
@@ -659,12 +680,14 @@ function buildSystemPrompt() {
   p += `═══ ZUSAMMENFASSUNG (nur wenn alle 8 Felder gefuellt) ═══\n`;
   p += `Fasse ALLE 8 Felder auf, so:\n`;
   p += `"Lass mich kurz zusammenfassen was ich notiert habe:\n`;
-  p += `- Hauptangebot: [Antwort]\n`;
+  p += `- Angebot 1: [Erstes Angebot]\n`;
+  p += `- Angebot 2: [Zweites Angebot]\n`;
+  p += `- Angebot 3: [Drittes Angebot, falls vorhanden]\n`;
   p += `- Staerkstes Standbein: [Antwort]\n`;
   p += `- Zielmarkt: [Antwort]\n`;
   p += `- Preissegment: [Antwort]\n`;
   p += `- USP: [Antwort]\n`;
-  p += `- Typischer Auftragswert: [Antwort]\n`;
+  p += `- Auftragswert/Pakete: [Antwort]\n`;
   p += `- Ausbauen/Veraendern: [Antwort]\n`;
   p += `- Nicht mehr anbieten: [Antwort]\n`;
   p += `Stimmt das so?"\n\n`;
@@ -829,6 +852,10 @@ window.startInterview = async function() {
 };
 
 window.stopInterview = async function() {
+  // FREEZE extraction — no more ghost-updates after stop
+  state._extractionFrozen = true;
+  logActivity('interview_stopped', { turns: state._agentTurnCount, msgs: state.messageCount });
+  
   // Disconnect adapter
   if (state.adapter && state.adapter.disconnect) state.adapter.disconnect();
   state.isConnected = false;
@@ -854,14 +881,16 @@ window.stopInterview = async function() {
   document.getElementById('textSendBtn').disabled = true;
   addMessage('system', '⏹ Interview beendet.');
   
-  // Finale Extraktion vor dem Speichern
+  // Finale Extraktion vor dem Speichern — temporarily unfreeze for final run
+  state._extractionFrozen = false;
   addMessage('system', '🔄 Finale Daten-Extraktion...');
   await maybeUpdateDnaCard();
+  state._extractionFrozen = true; // re-freeze after final extraction
   
   // Save to Supabase (offering_structure)
   const filledKeys = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?' && k !== '_updated');
   if (filledKeys.length > 0 && state.clientId) {
-    addMessage('system', `💾 Speichere Firmen-DNA (${filledKeys.length}/8 Felder)...`);
+    addMessage('system', `💾 Speichere Firmen-DNA (${filledKeys.length}/${DNA_FIELD_COUNT} Felder)...`);
     const ok = await saveDnaToSupabase();
     if (ok) {
       addMessage('system', '✅ Firmen-DNA erfolgreich in Supabase gespeichert!');
@@ -946,7 +975,7 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
 </style></head><body>`;
   html += `<h1>🏢 Angebots-Steckbrief <span class="live">● LIVE</span></h1>`;
   const groups = [
-    { title: 'A. Kerngeschäft', keys: ['hauptangebot', 'umsatzstaerkstes', 'zielmarkt'] },
+    { title: 'A. Kerngeschäft', keys: ['hauptangebot_1', 'hauptangebot_2', 'hauptangebot_3', 'umsatzstaerkstes', 'zielmarkt'] },
     { title: 'B. Positionierung', keys: ['preissegment', 'usp', 'auftragswert'] },
     { title: 'C. Strategie', keys: ['ausbauen', 'nicht_mehr'] }
   ];
@@ -964,7 +993,7 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
       html += `</div>`;
     }
   }
-  html += `<div id="extractionStatus" class="status-bar idle">✅ ${filled} / 8 Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
+  html += `<div id="extractionStatus" class="status-bar idle">✅ ${filled} / ${DNA_FIELD_COUNT} Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
   html += `<footer>ACP Produkte & Positionierung</footer>`;
   html += `</body></html>`;
   w.document.open();
@@ -993,7 +1022,9 @@ async function saveTranscript() {
     if (roleLabel.includes('Eusebia')) role = 'assistant';
     if (roleLabel.includes('Du')) role = 'user';
     const text = el.textContent.replace(roleLabel, '').trim();
-    if (text) msgs.push({ role, content: text, timestamp: new Date().toISOString() });
+    // Use REAL timestamp stored in data attribute (not save-time)
+    const ts = el.dataset.timestamp || new Date().toISOString();
+    if (text) msgs.push({ role, content: text, timestamp: ts });
   });
   
   const payload = {
