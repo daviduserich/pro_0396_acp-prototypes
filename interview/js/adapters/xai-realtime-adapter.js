@@ -175,6 +175,7 @@ class XaiRealtimeAdapter {
    * Send a text message from the user into the conversation.
    * Injects it as a conversation item so the LLM actually sees it.
    * Then triggers a response so the agent reacts to it.
+   * Sets _pendingTextResponse flag so we can re-arm VAD after response completes.
    * @param {string} text - The user's typed text
    */
   sendText(text) {
@@ -197,6 +198,7 @@ class XaiRealtimeAdapter {
     });
     
     // 2. Trigger agent response
+    this._pendingTextResponse = true; // Flag for VAD re-arm on response.done
     this._sendEvent({ type: 'response.create' });
     
     console.log('[xAI] 📝 Text injected:', text.substring(0, 80));
@@ -292,6 +294,14 @@ class XaiRealtimeAdapter {
       // ═══ Known lifecycle events (no action needed) ═══
       case 'response.created':
       case 'response.done':
+        // Re-arm VAD after text-triggered responses (fixes audio hang after correction clicks)
+        if (this._pendingTextResponse) {
+          this._pendingTextResponse = false;
+          console.log('[xAI] 🔄 Text response done — re-arming VAD for audio input');
+          // Commit any buffered audio so the server re-enters listening mode
+          this._sendEvent({ type: 'input_audio_buffer.commit' });
+        }
+        break;
       case 'response.output_audio.done':
       case 'response.output_item.added':
       case 'response.output_item.done':
