@@ -674,7 +674,9 @@ function buildSystemPrompt() {
   p += `Wenn ein Feld wirklich nicht zutrifft (z.B. "nicht_mehr"), akzeptiere "Nein, gibt es nicht" als gueltige Antwort.\n\n`;
   
   p += `═══ ABLAUF ═══\n`;
-  p += `1. Starte mit einer kurzen Begruessing und der ersten Frage (hauptangebot).\n`;
+  p += `1. Starte mit einer kurzen Begruessing, dann gib 2-3 kurze Hinweise BEVOR du die erste Frage stellst:\n`;
+  p += `   Sage sinngemäss: \"Bevor wir starten, kurz drei Tipps: Erstens, du kannst mich jederzeit mit 'Stopp' oder 'Moment' unterbrechen wenn etwas nicht stimmt. Zweitens, am Ende kannst du waehlen ob du die Zusammenfassung selber lesen oder von mir hoeren willst. Und drittens, im Angebots-Steckbrief rechts kannst du direkt auf ein Feld klicken um es zu korrigieren. So, jetzt los —\"\n`;
+  p += `   Dann stelle die erste Frage (hauptangebot). Die Hinweise muessen KURZ sein — max 3 Saetze.\n`;
   p += `2. Arbeite die Felder der Reihe nach ab. Natuerlich — nicht wie eine Checkliste vorlesen.\n`;
   p += `3. Wenn der Kunde bei einer Antwort mehrere Felder abdeckt, hake das intern ab.\n`;
   p += `4. Erst wenn ALLE 8 Felder gefuellt: Zusammenfassung machen.\n\n`;
