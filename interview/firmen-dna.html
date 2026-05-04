@@ -189,6 +189,10 @@ async function getToken() {
     if (!r.ok) {
       const txt = await r.text();
       console.error('[Token] HTTP Error:', r.status, txt);
+      // Check if this is a credit/billing issue from our error handler
+      if (r.status === 503 && txt.includes('credit')) {
+        throw new Error('💳 xAI Credits aufgebraucht! Bitte im xAI Console nachladen.');
+      }
       throw new Error(`Token HTTP ${r.status}: ${txt.substring(0, 100)}`);
     }
     const txt = await r.text();
@@ -196,7 +200,12 @@ async function getToken() {
       console.error('[Token] Empty response body');
       throw new Error('Token-Server liefert leere Antwort. n8n-Workflow prüfen!');
     }
-    return JSON.parse(txt);
+    const data = JSON.parse(txt);
+    // Check if response contains credit error info
+    if (data.error === 'xai_token_failed' && data.is_credit_issue) {
+      throw new Error('💳 xAI Credits aufgebraucht! Bitte im xAI Console nachladen.');
+    }
+    return data;
   } catch(e) {
     if (e.message.includes('JSON')) {
       console.error('[Token] JSON parse error — n8n webhook likely returned HTML or empty response');
