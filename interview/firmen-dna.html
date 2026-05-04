@@ -347,6 +347,8 @@ function renderDnaCard(data, source) {
     }
   }
   document.getElementById('dnaProgress').textContent = `${filled} / 8 Felder gefüllt`;
+  // Auto-refresh pop-out window if open
+  if (_popOutWindow && !_popOutWindow.closed) refreshPopOut();
 }
 
 window.correctField = function(fieldKey) {
@@ -412,7 +414,7 @@ function buildSystemPrompt() {
   p += `□ zielmarkt — "Wer sind eure Kunden — eher Firmen (B2B) oder Endkunden (B2C)?"\n`;
   p += `□ preissegment — "Seid ihr eher im Premium-, Mittel- oder Budget-Segment positioniert?"\n`;
   p += `□ usp — "Was unterscheidet euch von euren Mitbewerbern? Was ist euer USP?"\n`;
-  p += `□ auftragswert — "Was ist ein typischer Auftragswert bei euch? Grobe Groessenordnung genuegt."\n`;
+  p += `□ auftragswert — ACHTUNG: Wenn im Gespraech bereits ueber Preise, Pakete oder Monatsbetraege gesprochen wurde, frage NICHT nochmal separat nach dem Auftragswert. Fasse stattdessen zusammen: "Du hast vorhin erwaehnt dass eure Pakete bei X starten — das notiere ich als typischen Auftragswert. Passt das?" Nur wenn KEINE Preisinformation vorliegt, frage: "Was ist ein typischer Auftragswert bei euch?"\n`;
   p += `□ ausbauen — "Gibt es Bereiche die ihr ausbauen oder veraendern moechtet?"\n`;
   p += `□ nicht_mehr — "Gibt es Dienstleistungen oder Produkte die ihr bewusst NICHT mehr anbieten wollt?"\n\n`;
   
@@ -441,7 +443,10 @@ function buildSystemPrompt() {
   p += `- Nicht mehr anbieten: [Antwort]\n`;
   p += `Stimmt das so?"\n\n`;
   
-  p += `Nach Bestaetigung: "Super, damit haben wir ein vollstaendiges Bild eurer Angebotsstruktur. Danke!"\n\n`;
+  p += `Nach Bestaetigung: "Super, damit haben wir ein vollstaendiges Bild eurer Angebotsstruktur. Danke!"\n`;
+  p += `Dann SOFORT sagen: "Du kannst jetzt den Stopp-Knopf druecken, dann werden alle Daten gespeichert."\n`;
+  p += `WICHTIG: Warte NICHT still. Wenn der Kunde "okay", "super", "danke" oder aehnliches sagt, antworte SOFORT freundlich und weise auf den Stopp-Knopf hin.\n`;
+  p += `Sage NIEMALS einfach nichts — Stille am Ende ist verwirrend fuer den Kunden.\n\n`;
   
   p += `═══ KORREKTUR ═══\n`;
   p += `Wenn eine Nachricht mit [KORREKTUR-TRIGGER] beginnt, frage direkt: "Was stimmt hier nicht?" Korrigiere und mach weiter.\n`;
@@ -663,19 +668,32 @@ function startTimer() {
   }, 1000);
 }
 
-// ═══ POP-OUT STECKBRIEF ═══
+// ═══ POP-OUT STECKBRIEF (Live-Update) ═══
+let _popOutWindow = null;
+
 function popOutSteckbrief() {
-  const w = window.open('', 'steckbrief', 'width=500,height=700,scrollbars=yes');
-  if (!w) { alert('Pop-up blockiert! Bitte erlauben.'); return; }
+  _popOutWindow = window.open('', 'steckbrief', 'width=500,height=700,scrollbars=yes');
+  if (!_popOutWindow) { alert('Pop-up blockiert! Bitte erlauben.'); return; }
+  refreshPopOut();
+}
+
+function refreshPopOut() {
+  const w = _popOutWindow;
+  if (!w || w.closed) { _popOutWindow = null; return; }
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Angebots-Steckbrief</title>
 <style>body{font-family:'Inter',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:24px;margin:0;}
-h1{font-size:20px;margin-bottom:16px;color:#60a5fa;}h2{font-size:13px;color:#93c5fd;text-transform:uppercase;margin:16px 0 8px;letter-spacing:0.5px;}
-.field{padding:8px 12px;margin:4px 0;border-left:3px solid #333;font-size:13px;line-height:1.5;border-radius:0 6px 6px 0;background:rgba(255,255,255,0.03);}
-.field.filled{border-left-color:#22c55e;}.field .label{color:#93c5fd;font-weight:600;font-size:12px;}.field .value{color:#e0e0e0;}
-.progress{text-align:center;margin-top:16px;font-size:12px;color:#888;}.source{font-size:10px;color:#666;font-style:italic;}
+h1{font-size:20px;margin-bottom:16px;color:#60a5fa;display:flex;align-items:center;gap:8px;}
+h1 .live{font-size:10px;background:#22c55e;color:#000;padding:2px 8px;border-radius:10px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+h2{font-size:13px;color:#93c5fd;text-transform:uppercase;margin:16px 0 8px;letter-spacing:0.5px;}
+.field{padding:8px 12px;margin:4px 0;border-left:3px solid #333;font-size:13px;line-height:1.5;border-radius:0 6px 6px 0;background:rgba(255,255,255,0.03);transition:all 0.3s;}
+.field.filled{border-left-color:#22c55e;background:rgba(34,197,94,0.05);}
+.field .label{color:#93c5fd;font-weight:600;font-size:12px;}
+.field .value{color:#e0e0e0;margin-top:2px;}
+.progress{text-align:center;margin-top:16px;font-size:12px;color:#888;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;}
 footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
 </style></head><body>`;
-  html += `<h1>🏢 Angebots-Steckbrief</h1>`;
+  html += `<h1>🏢 Angebots-Steckbrief <span class="live">● LIVE</span></h1>`;
   const groups = [
     { title: 'A. Kerngeschäft', keys: ['hauptangebot', 'umsatzstaerkstes', 'zielmarkt'] },
     { title: 'B. Positionierung', keys: ['preissegment', 'usp', 'auftragswert'] },
@@ -695,9 +713,10 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
       html += `</div>`;
     }
   }
-  html += `<div class="progress">${filled} / 8 Felder gefüllt</div>`;
-  html += `<footer>ACP Produkte & Positionierung — ${new Date().toLocaleString('de-CH')}</footer>`;
+  html += `<div class="progress">✅ ${filled} / 8 Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
+  html += `<footer>ACP Produkte & Positionierung</footer>`;
   html += `</body></html>`;
+  w.document.open();
   w.document.write(html);
   w.document.close();
 }
