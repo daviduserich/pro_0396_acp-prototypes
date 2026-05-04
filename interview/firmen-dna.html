@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V2.5 — Timestamps + Extraction-Freeze + Sub-Felder</span>
+  <span class="version">V2.6 — Lese-Modus + Voice-Korrektur + Preis-Fix</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -652,7 +652,9 @@ function buildSystemPrompt() {
   p += `8. ANERKENNUNGS-ROTATION: Wechsle zwischen Bestaetigungen ab. Nie 2x hintereinander dasselbe.\n`;
   p += `9. STILLE-TOLERANZ: Wenn der Kunde schweigt, liest oder nachdenkt, WARTE STILL. Sage NICHTS. Kein \"Alles gut, nimm dir Zeit\", kein \"Sag Bescheid wenn du fertig bist\". EINFACH WARTEN. Der Kunde meldet sich wenn er bereit ist.\n`;
   p += `10. ANTI-SCHWAFELN: Halte deine Antworten KURZ. Max 2 Saetze. Bestaetige kurz → naechste Frage. KEINE Wiederholungen, KEINE Zusammenfassungen zwischendurch.\n`;
-  p += `11. AKTIVES ZUHOEREN: Wenn der Kunde in einer Antwort mehrere Felder abdeckt (z.B. Preise UND Zielmarkt), registriere BEIDES intern und frage NICHT nochmal danach.\n\n`;
+  p += `11. AKTIVES ZUHOEREN: Wenn der Kunde in einer Antwort mehrere Felder abdeckt (z.B. Preise UND Zielmarkt), registriere BEIDES intern und frage NICHT nochmal danach.\n`;
+  p += `12. VOICE-KORREKTUR: Wenn der Kunde waehrend des Gespraeachs sagt \"Stopp\", \"Moment\", \"Warte\" oder \"das stimmt nicht\" oder einen Wert korrigiert (z.B. \"es sind 295 nicht 2.95\"), HOERE SOFORT AUF mit der aktuellen Frage. Bestaetige die Korrektur: \"Okay, ich korrigiere das auf [korrekter Wert].\" Dann mach weiter.\n`;
+  p += `13. PREISE ALS GANZZAHLEN: In der Schweiz werden Preise oft als Ganzzahlen gesprochen. Wenn jemand \"zwei-fuenfundneunzig\" oder \"2,95\" sagt und es um Monatspreise/Pakete geht, ist IMMER 295 Franken gemeint, NICHT 2.95 CHF. Ebenso: \"vier-fuenfundachtzig\" = 485 Franken, \"sechs-fuenfzig\" = 650 Franken. Frage im Zweifel nach: \"Meinst du 295 Franken pro Monat?\"\n\n`;
   
   p += `═══ DIE 8 PFLICHTFELDER ═══\n`;
   p += `Du musst ALLE 8 Felder abfragen. Fuehre intern eine Checkliste:\n\n`;
@@ -677,9 +679,18 @@ function buildSystemPrompt() {
   p += `3. Wenn der Kunde bei einer Antwort mehrere Felder abdeckt, hake das intern ab.\n`;
   p += `4. Erst wenn ALLE 8 Felder gefuellt: Zusammenfassung machen.\n\n`;
   
-  p += `═══ ZUSAMMENFASSUNG (nur wenn alle 8 Felder gefuellt) ═══\n`;
-  p += `Fasse ALLE 8 Felder auf, so:\n`;
-  p += `"Lass mich kurz zusammenfassen was ich notiert habe:\n`;
+  p += `═══ ZUSAMMENFASSUNG + LESE-MODUS (nur wenn alle 8 Felder gefuellt) ═══\n`;
+  p += `Wenn alle Felder gefuellt sind, frage den Kunden ZUERST:\n`;
+  p += `\"Ich habe jetzt alles notiert. Moechtest du die Zusammenfassung selber im Angebots-Steckbrief lesen, oder soll ich sie dir vorlesen?\"\n\n`;
+  
+  p += `OPTION A — LESE-MODUS (Kunde will selber lesen):\n`;
+  p += `Sage: \"Gut, schau dir den Angebots-Steckbrief an. Wenn etwas nicht stimmt, klick direkt auf das Feld und wir besprechen es. Ich warte still.\"\n`;
+  p += `Dann WARTE STILL. Sage NICHTS MEHR bis der Kunde sich meldet.\n`;
+  p += `Wenn der Kunde sagt \"alles gut\" oder \"stimmt\": \"Super, dann kannst du den Stopp-Knopf druecken.\"\n`;
+  p += `Wenn der Kunde eine Korrektur macht: Bestaetige kurz, korrigiere, dann wieder still warten.\n\n`;
+  
+  p += `OPTION B — VORLESEN (Kunde will es hoeren):\n`;
+  p += `Fasse ALLE Felder auf, so:\n`;
   p += `- Angebot 1: [Erstes Angebot]\n`;
   p += `- Angebot 2: [Zweites Angebot]\n`;
   p += `- Angebot 3: [Drittes Angebot, falls vorhanden]\n`;
@@ -690,9 +701,9 @@ function buildSystemPrompt() {
   p += `- Auftragswert/Pakete: [Antwort]\n`;
   p += `- Ausbauen/Veraendern: [Antwort]\n`;
   p += `- Nicht mehr anbieten: [Antwort]\n`;
-  p += `Stimmt das so?"\n\n`;
+  p += `Stimmt das so?\n\n`;
   
-  p += `Nach Bestaetigung: "Super, damit haben wir alles. Du kannst jetzt den Stopp-Knopf druecken."\n`;
+  p += `Nach Bestaetigung: \"Super, damit haben wir alles. Du kannst jetzt den Stopp-Knopf druecken.\"\n`;
   p += `DANACH: Sage NICHTS MEHR. Warte still. Der Kunde drueckt den Knopf.\n`;
   p += `Wenn der Kunde noch eine Frage stellt, antworte kurz. Aber schwafle NICHT.\n\n`;
   
@@ -999,7 +1010,10 @@ footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
     }
   }
   html += `<div id="extractionStatus" class="status-bar idle">✅ ${filled} / ${DNA_FIELD_COUNT} Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
-  html += `<footer>ACP Produkte & Positionierung</footer>`;
+  html += `<div style="margin-top:12px;padding:8px 12px;background:rgba(96,165,250,0.06);border-radius:6px;font-size:10px;color:#6b7280;line-height:1.5;">
+ℹ️ <strong>Hinweis:</strong> Der Agent formuliert beim Sprechen teils anders als hier im Steckbrief. Der Steckbrief wird durch eine separate KI-Extraktion erstellt.
+<br>🖱️ Klicke auf ein Feld um eine Korrektur zu starten.</div>`;
+  html += `<footer>ACP Produkte &amp; Positionierung v2.1</footer>`;
   html += `</body></html>`;
   w.document.open();
   w.document.write(html);
