@@ -212,6 +212,20 @@ async function sbFetch(table, query='') {
   return r.json();
 }
 
+// ═══ SAFETY: Auto-disconnect on page close/refresh (prevents zombie billing) ═══
+window.addEventListener('beforeunload', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA] 🛑 beforeunload: Closing xAI WebSocket');
+    state.adapter.disconnect();
+  }
+});
+window.addEventListener('pagehide', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA] 🛑 pagehide: Closing xAI WebSocket');
+    state.adapter.disconnect();
+  }
+});
+
 // ═══ INIT ═══
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -539,6 +553,13 @@ window.startInterview = async function() {
   if (!state.clientId) return;
   addMessage('system', 'Interview wird gestartet... (xAI/Grok | ' + 
     (state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid') + ')');
+  
+  // ─── SAFETY: Kill any existing session first (prevents zombie billing) ───
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA] ⚠️ Killing existing adapter before new session');
+    state.adapter.disconnect();
+    state.adapter = null;
+  }
   
   // Adapter ist via script-tag geladen auf window.XaiRealtimeAdapter
   
