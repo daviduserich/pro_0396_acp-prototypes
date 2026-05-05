@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Produkte & Positionierung (V2 — LiveKit)</title>
+<meta name="description" content="Voice-Agent zur Erarbeitung der Produkte und Positionierung">
+<meta name="robots" content="noindex, nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f; --bg-card: #12121a; --bg-input: #1a1a26; --bg-hover: #1e1e2e;
+  --accent: #8b5cf6; --accent-glow: rgba(139,92,246,0.15); --accent-light: #a78bfa;
+  --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  --text: #e2e8f0; --text-dim: #94a3b8; --text-muted: #64748b;
+  --border: #1e293b; --radius: 12px; --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4); --font: 'Inter', -apple-system, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { font-family:var(--font); background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+.app-shell { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+.header { flex-shrink:0; padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; background:var(--bg-card); z-index:10; }
+.header h1 { font-size:18px; font-weight:600; background:linear-gradient(135deg,var(--accent-light),#c084fc); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; }
+.header .version { font-size:11px; color:var(--text-muted); background:var(--bg-input); padding:2px 8px; border-radius:4px; }
+.config-bar { flex-shrink:0; padding:12px 24px; border-bottom:1px solid var(--border); background:var(--bg-card); display:flex; flex-wrap:wrap; gap:12px; align-items:center; z-index:10; }
+.config-group { display:flex; align-items:center; gap:6px; }
+.config-group label { font-size:12px; color:var(--text-muted); font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+.config-group select { background:var(--bg-input); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; font-size:13px; font-family:var(--font); cursor:pointer; min-width:160px; }
+.config-group select:focus { outline:none; border-color:var(--accent); }
+.mode-toggle { display:flex; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; }
+.mode-btn { padding:6px 12px; font-size:11px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-muted); font-family:var(--font); transition:all 0.2s; white-space:nowrap; }
+.mode-btn.active { background:var(--accent); color:#fff; }
+.mode-btn:hover:not(.active) { background:var(--bg-hover); color:var(--text); }
+.main { flex:1; display:grid; grid-template-columns:280px 1fr; overflow:hidden; }
+.sidebar { padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border-right:1px solid var(--border); min-width:0; }
+.sidebar-section { background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+.sidebar-title { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+.chat-area { display:flex; flex-direction:column; overflow:hidden; border-left:1px solid var(--border); }
+.chat-messages { flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:12px; }
+.chat-messages::-webkit-scrollbar { width:4px; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.msg { max-width:80%; padding:10px 14px; border-radius:var(--radius); font-size:14px; line-height:1.5; animation:fadeIn 0.3s ease; }
+.msg.assistant { align-self:flex-start; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-left:3px solid var(--accent); }
+.msg.user { align-self:flex-end; background:var(--bg-input); border:1px solid var(--border); }
+.msg.system { align-self:center; background:transparent; color:var(--text-muted); font-size:12px; font-style:italic; }
+.msg .role-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+.msg.assistant .role-label { color:var(--accent-light); }
+.msg.user .role-label { color:var(--text-dim); }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.typing-indicator { display:none; align-self:flex-start; padding:10px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); }
+.typing-indicator.visible { display:flex; gap:4px; align-items:center; }
+.typing-dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); animation:typingBounce 1.4s infinite; }
+.typing-dot:nth-child(2) { animation-delay:0.2s; }
+.typing-dot:nth-child(3) { animation-delay:0.4s; }
+@keyframes typingBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-6px); } }
+.controls { padding:12px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:12px; }
+.ctrl-btn { padding:8px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-input); color:var(--text); cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+.ctrl-btn:hover { border-color:var(--accent); color:var(--accent-light); }
+.ctrl-btn.danger { border-color:var(--red); color:var(--red); }
+.ctrl-btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ctrl-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.text-input-bar { padding:8px 24px; border-top:1px solid var(--border); background:var(--bg-card); display:flex; align-items:center; gap:10px; }
+.text-input-bar input { flex:1; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; color:var(--text); font-size:14px; font-family:var(--font); outline:none; }
+.text-input-bar input:focus { border-color:var(--accent); }
+.text-input-bar input::placeholder { color:var(--text-muted); }
+.text-input-bar button { padding:10px 16px; border-radius:var(--radius-sm); border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; font-family:var(--font); font-weight:500; }
+.text-input-bar button:disabled { opacity:0.4; cursor:not-allowed; }
+.dna-field { font-size:12px; color:var(--text-dim); padding:4px 0 4px 4px; line-height:1.4; border-left:2px solid var(--border); margin-left:4px; padding-left:8px; transition:all 0.3s; margin-bottom:2px; }
+.dna-field.filled { color:var(--text); border-left-color:var(--green); cursor:pointer; }
+.dna-field.filled:hover { background:rgba(255,255,255,0.05); border-left-color:var(--accent-light); border-radius:0 4px 4px 0; }
+.dna-field .af-icon { font-size:11px; margin-right:2px; }
+.dna-field .af-value { color:var(--text); font-weight:500; }
+.info-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; }
+.info-label { color:var(--text-muted); }
+.info-value { font-weight:500; }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+.status-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+.welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; gap:16px; }
+.welcome-icon { font-size:64px; opacity:0.3; }
+.welcome h2 { font-size:22px; font-weight:600; }
+.welcome p { color:var(--text-dim); max-width:400px; line-height:1.6; font-size:14px; }
+@media (max-width: 768px) { .main { grid-template-columns:1fr; } .sidebar { display:none; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.5/dist/livekit-client.umd.js"></script>
+</head>
+<body>
+<div class="app-shell">
+<div class="header">
+  <h1>🏢 ACP Produkte & Positionierung</h1>
+  <span class="version">V3.0 — LiveKit Self-Hosted + Claude Sonnet</span>
+</div>
+<div class="config-bar">
+  <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
+  <div class="config-group"><label>Modus</label>
+    <div class="mode-toggle">
+      <button class="mode-btn" data-mode="voice" onclick="setMode('voice')" title="Nur Sprache: Du sprichst, Eusebia antwortet per Audio. Kein Textfeld.">🔊 Voice</button>
+      <button class="mode-btn active" data-mode="hybrid" onclick="setMode('hybrid')" title="Sprache + Text: Du kannst sprechen ODER tippen. Eusebia antwortet per Audio.">⌨️ Hybrid</button>
+      <button class="mode-btn" data-mode="read" onclick="setMode('read')" title="Nur Text: Du tippst, Eusebia antwortet schriftlich. Kein Audio.">📖 Lesen</button>
+    </div>
+  </div>
+  <div class="config-group"><label id="engineLabel">LiveKit/Claude</label></div>
+  <button class="ctrl-btn primary" id="startBtn" onclick="startInterview()" disabled>▶ Starten</button>
+  <button class="ctrl-btn danger" id="stopBtn" onclick="stopInterview()" style="display:none;">⏹ Stopp</button>
+  <button class="ctrl-btn" id="saveBtn" onclick="saveTranscript()" style="display:none;" title="Gespräch + DNA speichern">💾 Speichern</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <!-- DNA STECKBRIEF -->
+    <div class="sidebar-section">
+      <div class="sidebar-title" style="cursor:pointer;" onclick="toggleDnaCard()">
+        🏢 Angebots-Steckbrief
+        <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+          <button onclick="event.stopPropagation();popOutSteckbrief()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px 6px;" title="In neuem Fenster öffnen">↗</button>
+          <span style="font-size:10px;" id="dnaToggleIcon">▼</span>
+        </span>
+      </div>
+      <div id="dnaCardBody">
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin-bottom:4px;text-transform:uppercase;">A. Kerngeschäft</div>
+        <div class="dna-field" id="df-hauptangebot_1" onclick="correctField('hauptangebot_1')"><span class="af-icon">⏳</span> Angebot 1</div>
+        <div class="dna-field" id="df-hauptangebot_2" onclick="correctField('hauptangebot_2')"><span class="af-icon">⏳</span> Angebot 2</div>
+        <div class="dna-field" id="df-hauptangebot_3" onclick="correctField('hauptangebot_3')"><span class="af-icon">⏳</span> Angebot 3</div>
+        <div class="dna-field" id="df-umsatzstaerkstes" onclick="correctField('umsatzstaerkstes')"><span class="af-icon">⏳</span> Umsatzstärkstes</div>
+        <div class="dna-field" id="df-zielmarkt" onclick="correctField('zielmarkt')"><span class="af-icon">⏳</span> Zielmarkt</div>
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">B. Positionierung</div>
+        <div class="dna-field" id="df-preissegment" onclick="correctField('preissegment')"><span class="af-icon">⏳</span> Preissegment</div>
+        <div class="dna-field" id="df-usp" onclick="correctField('usp')"><span class="af-icon">⏳</span> USP</div>
+        <div class="dna-field" id="df-auftragswert" onclick="correctField('auftragswert')"><span class="af-icon">⏳</span> Auftragswert / Pakete</div>
+        <div style="font-size:11px;font-weight:600;color:var(--accent-light);margin:8px 0 4px;text-transform:uppercase;">C. Strategie</div>
+        <div class="dna-field" id="df-ausbauen" onclick="correctField('ausbauen')"><span class="af-icon">⏳</span> Ausbauen/Verändern</div>
+        <div class="dna-field" id="df-nicht_mehr" onclick="correctField('nicht_mehr')"><span class="af-icon">⏳</span> Was NICHT mehr</div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;" id="dnaProgress">0 / 10 Felder gefüllt</div>
+      <div id="dnaSaveStatus" style="margin-top:4px;font-size:10px;text-align:center;color:var(--yellow);">⚠️ Nicht gespeichert</div>
+    </div>
+    <!-- SESSION INFO -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">📊 Session</div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="statusText"><span class="status-dot"></span> Bereit</span></div>
+      <div class="info-row"><span class="info-label">Turn</span><span class="info-value" id="turnCount">0</span></div>
+      <div class="info-row"><span class="info-label">Nachrichten</span><span class="info-value" id="msgCount">0</span></div>
+      <div class="info-row"><span class="info-label">Dauer</span><span class="info-value" id="duration">00:00</span></div>
+      <div id="turnProgress" style="margin-top:8px;"></div>
+    </div>
+    <!-- SESSIONS LIST -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">📜 Letzte Sessions</div>
+      <div id="sessionsList" style="font-size:11px;color:var(--text-muted);">Wird geladen...</div>
+    </div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">🏢</div>
+        <h2>Produkte & Positionierung erarbeiten</h2>
+        <p>Eusebia erarbeitet mit dir in 5-8 Minuten dein Produkte-Portfolio und deine Positionierung — als Grundlage für die Persona-Erarbeitung.</p>
+      </div>
+    </div>
+    <div class="typing-indicator" id="typingIndicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+    <div class="controls">
+      <button class="ctrl-btn" id="micBtn" onclick="toggleMic()" disabled title="Mikrofon aus">🎙️</button>
+      <span style="flex:1;font-size:12px;color:var(--text-muted);" id="micStatus">Nicht verbunden</span>
+    </div>
+    <div class="text-input-bar" id="textInputBar">
+      <input type="text" id="textInput" placeholder="Nachricht tippen..." disabled>
+      <button id="textSendBtn" onclick="sendTextInput()" disabled>Senden</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="./js/adapters/livekit-adapter.js"></script>
+<script>
+
+// ═══ STATE ═══
+const state = {
+  clientId: '', engine: 'livekit', interactionMode: 'voice', ttsEnabled: true,
+  isConnected: false, isRecording: false, adapter: null, sessionId: null,
+  messageCount: 0, startTime: null, _lastUserMsg: null, _cachedToken: null,
+  dnaData: {}, _timerInterval: null, _researchContext: null,
+  _agentTurnCount: 0, _dnaSaved: false, _iterationLabel: null
+};
+
+// ═══ SUPABASE HELPERS ═══
+const SB_URL = 'https://odxbrrtpwlxxnchnoubn.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9keGJycnRwd2x4eG5jaG5vdWJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4Mzg1OTEsImV4cCI6MjA4NjQxNDU5MX0.U-lKsXf4bkK3oUhQ4vrDy6TelKKO3GlJYH4DaHJu3zo';
+
+// LiveKit Self-Hosted Config
+const LK_SERVER_URL = 'wss://lk.n8n-mxs.com';
+const LK_API_KEY = 'APIkFentXn49MuP';
+const LK_API_SECRET = 'J3HZYjQiSy0ZTGRIJLuDjh25eGVov2t5cBngYlW1';
+const LK_ROOM = 'acp-interview-test';
+const ANTHROPIC_API_KEY_EXTRACTION = ''; // Set if you want client-side extraction
+
+async function getToken() {
+  // LiveKit tokens are generated server-side via the agent container
+  try {
+    const r = await fetch(`${LK_SERVER_URL.replace('wss://', 'https://')}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room: LK_ROOM, identity: `user-${state.clientId || 'anon'}` })
+    });
+    if (r.ok) {
+      const data = await r.json();
+      return data.token;
+    }
+  } catch(e) {
+    console.warn('[Token] Server-side token failed, using n8n fallback:', e);
+  }
+  // Fallback: generate via n8n webhook (needs endpoint on VM)
+  const r2 = await fetch('https://n8n-mxs.com/webhook/livekit-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: LK_API_KEY, api_secret: LK_API_SECRET,
+      room: LK_ROOM, identity: `user-${state.clientId || Date.now()}`
+    })
+  });
+  if (r2.ok) {
+    const d = await r2.json();
+    return d.token || d;
+  }
+  throw new Error('Token konnte nicht generiert werden. Prüfe n8n Webhook oder Agent-Container.');
+}
+
+async function sbFetch(table, query='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${query}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+  });
+  return r.json();
+}
+
+// ═══ SAFETY: Auto-disconnect on page close/refresh (prevents zombie billing) ═══
+window.addEventListener('beforeunload', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA-V2] 🛑 beforeunload: Closing LiveKit connection');
+    state.adapter.disconnect();
+  }
+});
+window.addEventListener('pagehide', () => {
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA-V2] 🛑 pagehide: Closing LiveKit connection');
+    state.adapter.disconnect();
+  }
+});
+
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const clients = await sbFetch('clients', '?select=id,name,slug&active=eq.true&order=name');
+    const sel = document.getElementById('clientSelect');
+    sel.innerHTML = '<option value="">— Kunde wählen —</option>';
+    clients.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.name || c.slug}</option>`; });
+    sel.onchange = async () => {
+      state.clientId = sel.value;
+      document.getElementById('startBtn').disabled = !state.clientId;
+      if (state.clientId) {
+        await loadResearchContext(state.clientId);
+        await loadSessions(state.clientId);
+      }
+    };
+  } catch(e) { console.error('Clients laden:', e); }
+  
+  document.getElementById('textInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextInput(); }
+  });
+});
+
+// ═══ RESEARCH PRE-FILL ═══
+async function loadResearchContext(clientId) {
+  try {
+    const rows = await sbFetch('clients', `?id=eq.${clientId}&select=name,voice_config`);
+    if (!rows[0]) return;
+    const vc = rows[0].voice_config || {};
+    const rc = vc.research_context || null;
+    const os = vc.offering_structure || null;
+    state._researchContext = rc;
+    
+    // Pre-fill steckbrief with existing offering_structure (if available)
+    if (os && Object.keys(os).filter(k => k !== '_updated').length > 0) {
+      renderDnaCard(os, 'existing');
+      addMessage('system', `📋 ${Object.keys(os).filter(k => os[k] && os[k] !== '?' && k !== '_updated').length}/8 Felder aus letzter Session geladen.`);
+    }
+    // Show research context info
+    if (rc) {
+      const info = [rc.firma, rc.branche, rc.region].filter(Boolean).join(' | ');
+      addMessage('system', `🔍 Recherche-Daten geladen: ${info}`);
+    }
+  } catch(e) { console.error('[Research] Load error:', e); }
+}
+
+// ═══ DNA FIELDS ═══
+const DNA_FIELDS = {
+  hauptangebot_1: 'df-hauptangebot_1', hauptangebot_2: 'df-hauptangebot_2', hauptangebot_3: 'df-hauptangebot_3',
+  umsatzstaerkstes: 'df-umsatzstaerkstes',
+  zielmarkt: 'df-zielmarkt', preissegment: 'df-preissegment',
+  usp: 'df-usp', auftragswert: 'df-auftragswert',
+  ausbauen: 'df-ausbauen', nicht_mehr: 'df-nicht_mehr'
+};
+const DNA_LABELS = {
+  hauptangebot_1:'Angebot 1', hauptangebot_2:'Angebot 2', hauptangebot_3:'Angebot 3',
+  umsatzstaerkstes:'Umsatzstärkstes Angebot',
+  zielmarkt:'Zielmarkt', preissegment:'Preissegment',
+  usp:'USP/Alleinstellung', auftragswert:'Auftragswert / Pakete',
+  ausbauen:'Ausbauen/Verändern', nicht_mehr:'Was NICHT mehr'
+};
+const DNA_FIELD_COUNT = 10; // 3 Angebote + 7 andere Felder
+
+// Activity log for analytics
+const _activityLog = [];
+function logActivity(event, data) {
+  _activityLog.push({ ts: new Date().toISOString(), event, ...data });
+  console.log(`[Activity] ${event}`, data || '');
+}
+
+// ═══ CHAT ═══
+function addMessage(role, content) {
+  const w = document.getElementById('welcomeScreen');
+  if (w) w.style.display = 'none';
+  const container = document.getElementById('chatMessages');
+  const msg = document.createElement('div');
+  msg.className = `msg ${role}`;
+  msg.dataset.timestamp = new Date().toISOString(); // REAL timestamp per message
+  const label = role === 'assistant' ? '🤖 Eusebia' : role === 'user' ? '👤 Du' : '📌 System';
+  msg.innerHTML = `<div class="role-label">${label}</div>${escapeHtml(content)}`;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+  state.messageCount++;
+  document.getElementById('msgCount').textContent = state.messageCount;
+  logActivity('message', { role, len: content.length });
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function showTyping(s) { document.getElementById('typingIndicator').classList.toggle('visible', s); }
+
+// ═══ MODE ═══
+window.setMode = function(mode) {
+  state.interactionMode = mode;
+  state.ttsEnabled = (mode === 'voice');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (state.adapter && state.adapter.setAudioPlaybackEnabled) state.adapter.setAudioPlaybackEnabled(mode === 'voice');
+  if (state.isConnected) {
+    const ml = mode === 'voice' ? '🔊 Voice' : mode === 'read' ? '📖 Lesen' : '⌨️ Hybrid';
+    addMessage('system', `Umgestellt: ${ml}`);
+  }
+};
+
+// ═══ TEXT INPUT ═══
+window.sendTextInput = function() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text || !state.isConnected) return;
+  handleAdapterMessage('user', text);
+  if (state.adapter && state.adapter.sendText) {
+    state.adapter.sendText(state.interactionMode === 'voice' ? `[Getippte Ergänzung]: ${text}` : text);
+  }
+  input.value = '';
+  input.focus();
+};
+
+// ═══ POST-PROCESSING V2.3 (Fixes mid-sentence replacement bug) ═══
+const TABOO_WORDS = ['genau', 'absolut', 'auf jeden fall', 'hervorragend', 'grossartig', 'wunderbar', 'ganz genau', 'definitiv'];
+const ACK_POOL = ['Okay', 'Alles klar', 'Gut', 'Klar', 'Notiert'];
+let _lastAck = '';
+
+function pickAck() {
+  const pool = ACK_POOL.filter(a => a !== _lastAck);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  _lastAck = pick;
+  return pick;
+}
+
+function postProcessAgent(text) {
+  let processed = text;
+  // 1. Taboo-Word replacement — ONLY at sentence start (after . or beginning)
+  TABOO_WORDS.forEach(tw => {
+    // Match only when taboo word is at sentence start (after period+space, or at text start)
+    const reStart = new RegExp(`(^|[.!?]\\s+)${tw}([,\\s])`, 'gi');
+    if (reStart.test(processed)) {
+      const replacement = pickAck();
+      processed = processed.replace(reStart, `$1${replacement}$2`);
+      console.log(`[PostProc] Taboo replaced: "${tw}" → "${replacement}"`);
+    }
+  });
+  // 2. Verstehe-Rotation — ONLY at sentence boundaries, not mid-sentence
+  const versteheStart = /(?:^|[.!?]\s+)(verstehe[,.]?\s)/gi;
+  processed = processed.replace(versteheStart, (match) => {
+    return match.replace(/verstehe[,.]?\s/i, pickAck() + '. ');
+  });
+  // Also catch standalone "Ich verstehe" / "Das verstehe ich"
+  processed = processed.replace(/\b(ich verstehe|das verstehe ich|verstanden)[.,]?/gi, pickAck());
+  // 3. Multi-question detection (warn in console, strip extra questions)
+  const sentences = processed.split(/(?<=[.!?])\s+/);
+  const questionSentences = sentences.filter(s => s.includes('?'));
+  if (questionSentences.length > 1) {
+    console.warn(`[PostProc] ⚠️ ${questionSentences.length} Fragen — keeping only last`);
+    // Keep all non-question sentences + last question
+    const nonQ = sentences.filter(s => !s.includes('?'));
+    const lastQ = questionSentences[questionSentences.length - 1];
+    processed = [...nonQ, lastQ].join(' ').trim();
+  }
+  // 4. Danke-Stripping: remove excessive "danke" at start
+  processed = processed.replace(/^(vielen )?danke[,!.]?\s*/i, '');
+  // 5. Clean up double spaces / artifacts
+  processed = processed.replace(/\s{2,}/g, ' ').trim();
+  return processed;
+}
+
+// ═══ ADAPTER CALLBACKS (with Post-Processing) ═══
+function handleAdapterMessage(role, content) {
+  showTyping(false);
+  let displayContent = content;
+  
+  if (role === 'user') {
+    const trimmed = content.trim();
+    if (!trimmed || trimmed === state._lastUserMsg) return;
+    if (state._lastUserMsg && trimmed.startsWith(state._lastUserMsg)) {
+      const msgs = document.querySelectorAll('#chatMessages .msg.user');
+      if (msgs.length > 0) { const last = msgs[msgs.length-1]; last.remove(); state.messageCount--; }
+    } else if (state._lastUserMsg && state._lastUserMsg.startsWith(trimmed)) return;
+    state._lastUserMsg = trimmed;
+  }
+  
+  if (role === 'assistant') {
+    state._lastUserMsg = null;
+    state._agentTurnCount++;
+    // Post-Processing V2.2
+    displayContent = postProcessAgent(content);
+    // Update turn counter in sidebar
+    document.getElementById('turnCount').textContent = state._agentTurnCount;
+    updateTurnProgress();
+    // DNA extraction EVERY turn (was: every 2 turns — too slow)
+    maybeUpdateDnaCard();
+  }
+  
+  addMessage(role, displayContent);
+}
+
+function updateTurnProgress() {
+  const maxTurns = 12; // 8-field interview is ~10-12 turns
+  const pct = Math.min(100, Math.round((state._agentTurnCount / maxTurns) * 100));
+  const el = document.getElementById('turnProgress');
+  if (!el) return;
+  const warning = state._agentTurnCount >= 10 ? `<div style="font-size:10px;color:var(--yellow);margin-top:4px;">⚠️ Bald zusammenfassen!</div>` : '';
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Turn ${state._agentTurnCount}/${maxTurns}</span>
+      <div style="flex:1;height:4px;background:var(--bg-hover);border-radius:2px;overflow:hidden;">
+        <div style="height:100%;background:var(--accent);transition:width 0.5s ease;width:${pct}%;"></div>
+      </div>
+    </div>${warning}`;
+}
+
+// ═══ DNA CARD ═══
+let _dnaCardVisible = true;
+
+window.toggleDnaCard = function() {
+  _dnaCardVisible = !_dnaCardVisible;
+  document.getElementById('dnaCardBody').style.display = _dnaCardVisible ? 'block' : 'none';
+  document.getElementById('dnaToggleIcon').textContent = _dnaCardVisible ? '▼' : '▶';
+};
+
+function renderDnaCard(data, source) {
+  state.dnaData = { ...state.dnaData, ...data };
+  let filled = 0;
+  for (const [key, domId] of Object.entries(DNA_FIELDS)) {
+    const el = document.getElementById(domId);
+    if (!el) continue;
+    const val = state.dnaData[key];
+    const label = DNA_LABELS[key] || key;
+    if (val && val.trim && val.trim() !== '' && val !== '?') {
+      const sourceTag = source === 'existing' ? ' <span style="font-size:9px;color:var(--text-muted);">(gespeichert)</span>' : '';
+      el.innerHTML = `<span class="af-icon">✅</span> <strong style="color:var(--accent-light);font-size:11px;">${escapeHtml(label)}:</strong> <span class="af-value">${escapeHtml(val)}</span>${sourceTag}`;
+      el.classList.add('filled');
+      filled++;
+    } else {
+      el.innerHTML = `<span class="af-icon">⏳</span> <span style="color:var(--text-muted);">${escapeHtml(label)}</span>`;
+    }
+  }
+  document.getElementById('dnaProgress').textContent = `${filled} / ${DNA_FIELD_COUNT} Felder gefüllt`;
+  // Update save indicator
+  if (filled > 0 && !state._dnaSaved) {
+    const ss = document.getElementById('dnaSaveStatus');
+    if (ss) { ss.textContent = '⚠️ Nicht gespeichert — "Speichern" klicken'; ss.style.color = 'var(--yellow)'; }
+  }
+  // Auto-refresh pop-out window if open
+  if (_popOutWindow && !_popOutWindow.closed) refreshPopOut();
+}
+
+// Push status text to both sidebar AND pop-out
+function setExtractionStatus(text, type) {
+  // type: 'working' | 'success' | 'error' | 'idle'
+  const prog = document.getElementById('dnaProgress');
+  if (prog) {
+    prog.textContent = text;
+    prog.style.color = type === 'working' ? 'var(--yellow)' : type === 'error' ? '#ef4444' : 'var(--text-muted)';
+  }
+  // Push to pop-out
+  if (_popOutWindow && !_popOutWindow.closed) {
+    try {
+      const statusEl = _popOutWindow.document.getElementById('extractionStatus');
+      if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.className = 'status-bar ' + (type || 'idle');
+      }
+    } catch(e) { /* cross-origin */ }
+  }
+}
+
+window.correctField = function(fieldKey) {
+  if (!state.isConnected) return;
+  const el = document.getElementById(DNA_FIELDS[fieldKey]);
+  if (!el || !el.classList.contains('filled')) return;
+  const val = state.dnaData[fieldKey] || '';
+  const label = DNA_LABELS[fieldKey] || fieldKey;
+  const msg = `[KORREKTUR-TRIGGER] Der User möchte das Feld "${label}" korrigieren. Aktueller Wert: "${val}". Frage: "Was stimmt beim ${label} nicht?"`;
+  if (state.adapter && state.adapter.sendText) state.adapter.sendText(msg);
+  addMessage('system', `✏️ Korrektur: ${label}`);
+  el.style.borderLeftColor = 'var(--yellow)';
+  el.style.background = 'rgba(234,179,8,0.1)';
+  setTimeout(() => { el.style.borderLeftColor = ''; el.style.background = ''; }, 5000);
+};
+
+let _extractionRunning = false;
+let _extractionCount = 0;
+
+async function maybeUpdateDnaCard() {
+  if (state._extractionFrozen) { console.log('[DNA] Frozen'); return; }
+  if (_extractionRunning) { console.log('[DNA] Busy'); return; }
+  try {
+    _extractionRunning = true;
+    _extractionCount++;
+    const msgs = document.querySelectorAll('#chatMessages .msg:not(.system)');
+    if (msgs.length < 3) { _extractionRunning = false; return; }
+    setExtractionStatus(`🔄 Extrahiere... (Turn ${state._agentTurnCount})`, 'working');
+    let transcript = '';
+    msgs.forEach(m => {
+      const isA = m.classList.contains('assistant'), isU = m.classList.contains('user');
+      if (!isA && !isU) return;
+      const roleEl = m.querySelector('.role-label');
+      const text = m.textContent.replace(roleEl?.textContent || '', '').trim();
+      if (text) transcript += `${isA ? 'AGENT' : 'KUNDE'}: ${text}\n`;
+    });
+    if (transcript.length < 100) { _extractionRunning = false; return; }
+    console.log(`[DNA #${_extractionCount}] Regex on ${transcript.length} chars`);
+    const extracted = {};
+    // Angebote from agent summaries
+    const s1 = transcript.match(/(?:Angebot\s*1|Erstes?\s+Angebot)[\s:]*([^\n]+)/i);
+    if (s1) extracted.hauptangebot_1 = s1[1].trim();
+    const s2 = transcript.match(/(?:Angebot\s*2|Zweites?\s+Angebot)[\s:]*([^\n]+)/i);
+    if (s2) extracted.hauptangebot_2 = s2[1].trim();
+    const s3 = transcript.match(/(?:Angebot\s*3|Drittes?\s+Angebot)[\s:]*([^\n]+)/i);
+    if (s3) extracted.hauptangebot_3 = s3[1].trim();
+    const um = transcript.match(/(?:umsatzst|stärkstes?\s+standbein|am\s+meisten\s+geld)[\s:]*([^\n.]{5,80})/i);
+    if (um) extracted.umsatzstaerkstes = um[1].trim();
+    const low = transcript.toLowerCase();
+    if (low.includes('b2b') || low.includes('firmen') || low.includes('geschäftskunden'))
+      extracted.zielmarkt = low.includes('b2c') ? 'B2B + B2C' : 'B2B';
+    else if (low.includes('b2c') || low.includes('endkunden'))
+      extracted.zielmarkt = 'B2C';
+    if (low.includes('premium') || low.includes('hochpreis')) extracted.preissegment = 'Premium';
+    else if (low.includes('mittel')) extracted.preissegment = 'Mittel';
+    else if (low.includes('budget') || low.includes('günstig')) extracted.preissegment = 'Budget';
+    const usp = transcript.match(/(?:usp|unterscheidet|alleinstellung)[\s:]*([^\n.]{10,120})/i);
+    if (usp) extracted.usp = usp[1].trim();
+    const preis = transcript.match(/(\d{2,5})\s*(?:franken|chf|fr\.|euro|€)/gi);
+    if (preis) extracted.auftragswert = preis.join(', ');
+    const aus = transcript.match(/(?:ausbauen|verändern|wachsen|erweitern)[\s:]*([^\n.]{5,80})/i);
+    if (aus) extracted.ausbauen = aus[1].trim();
+    const nm = transcript.match(/(?:nicht\s+mehr|aufhören|loswerden|weg\s+von)[\s:]*([^\n.]{5,80})/i);
+    if (nm) extracted.nicht_mehr = nm[1].trim();
+    const filled = Object.values(extracted).filter(v => v && v !== '?').length;
+    console.log(`[DNA #${_extractionCount}] ✅ ${filled}/${DNA_FIELD_COUNT} fields`);
+    logActivity('extraction_done', { filled, turn: state._agentTurnCount, method: 'regex' });
+    if (filled > 0) renderDnaCard(extracted);
+    else setExtractionStatus(`⏳ Noch zu wenig Daten`, 'idle');
+  } catch(e) {
+    console.error('[DNA] ❌', e);
+    setExtractionStatus(`❌ ${e.message}`, 'error');
+  } finally { _extractionRunning = false; }
+}
+
+
+
+// ═══ SYSTEM PROMPT ═══
+function buildSystemPrompt() {
+  let p = `Du bist Eusebia, eine neugierige und strukturierte Journalistin.\n`;
+  p += `Deine Aufgabe: Die Angebotsstruktur und das Produkte-Portfolio des Kunden VOLLSTAENDIG erarbeiten.\n\n`;
+  
+  p += `═══ WICHTIGE REGELN ═══\n`;
+  p += `1. Du sprichst IMMER Deutsch (Schweizer Stil, natuerlich, kein Hochdeutsch-Pathos).\n`;
+  p += `2. Du fragst EINE Frage auf einmal. Kurz, direkt, konkret. NIEMALS zwei Fragen in einem Satz.\n`;
+  p += `3. Du bist neugierig aber effizient — kein Smalltalk.\n`;
+  p += `4. VERSTEHE-VERBOT: Sage NIEMALS "verstehe", "das verstehe ich" oder "ich verstehe". Nutze stattdessen Varianten: "Okay", "Klar", "Alles klar", "Mhm", "Gut".\n`;
+  p += `5. VERBOTENE WOERTER: "genau", "absolut", "auf jeden Fall", "hervorragend", "grossartig", "wunderbar", "definitiv".\n`;
+  p += `6. DANKE-STRIPPING: Beginne KEINE Antwort mit "Danke" oder "Vielen Dank". Steige direkt ein.\n`;
+  p += `7. Wenn der Kunde vage antwortet, hake nach: "Kannst du das etwas konkreter machen?"\n`;
+  p += `8. ANERKENNUNGS-ROTATION: Wechsle zwischen Bestaetigungen ab. Nie 2x hintereinander dasselbe.\n`;
+  p += `9. STILLE-TOLERANZ: Wenn der Kunde schweigt, liest oder nachdenkt, WARTE STILL. Sage NICHTS. Kein \"Alles gut, nimm dir Zeit\", kein \"Sag Bescheid wenn du fertig bist\". EINFACH WARTEN. Der Kunde meldet sich wenn er bereit ist.\n`;
+  p += `10. ANTI-SCHWAFELN: Halte deine Antworten KURZ. Max 2 Saetze. Bestaetige kurz → naechste Frage. KEINE Wiederholungen, KEINE Zusammenfassungen zwischendurch.\n`;
+  p += `11. AKTIVES ZUHOEREN: Wenn der Kunde in einer Antwort mehrere Felder abdeckt (z.B. Preise UND Zielmarkt), registriere BEIDES intern und frage NICHT nochmal danach.\n`;
+  p += `12. VOICE-KORREKTUR: Wenn der Kunde waehrend des Gespraeachs sagt \"Stopp\", \"Moment\", \"Warte\" oder \"das stimmt nicht\" oder einen Wert korrigiert (z.B. \"es sind 295 nicht 2.95\"), HOERE SOFORT AUF mit der aktuellen Frage. Bestaetige die Korrektur: \"Okay, ich korrigiere das auf [korrekter Wert].\" Dann mach weiter.\n`;
+  p += `13. PREISE ALS GANZZAHLEN: In der Schweiz werden Preise oft als Ganzzahlen gesprochen. Wenn jemand \"zwei-fuenfundneunzig\" oder \"2,95\" sagt und es um Monatspreise/Pakete geht, ist IMMER 295 Franken gemeint, NICHT 2.95 CHF. Ebenso: \"vier-fuenfundachtzig\" = 485 Franken, \"sechs-fuenfzig\" = 650 Franken. Frage im Zweifel nach: \"Meinst du 295 Franken pro Monat?\"\n\n`;
+  
+  p += `═══ DIE 8 PFLICHTFELDER ═══\n`;
+  p += `Du musst ALLE 8 Felder abfragen. Fuehre intern eine Checkliste:\n\n`;
+  p += `□ hauptangebot — "Was sind eure Hauptprodukte oder Dienstleistungen?" WICHTIG: Wenn der Kunde MEHRERE Angebote/Bereiche nennt, merke dir jeden einzeln als Angebot 1, Angebot 2, Angebot 3. Beziehe dich in der Zusammenfassung darauf mit "Angebot 1:", "Angebot 2:", "Angebot 3:". So kann der Kunde spaeter gezielt korrigieren.\n`;
+  p += `□ umsatzstaerkstes — "Womit verdient ihr am meisten Geld? Was ist euer staerkstes Standbein?"\n`;
+  p += `□ zielmarkt — "Wer sind eure Kunden — eher Firmen (B2B) oder Endkunden (B2C)?"\n`;
+  p += `□ preissegment — "Seid ihr eher im Premium-, Mittel- oder Budget-Segment positioniert?"\n`;
+  p += `□ usp — "Was unterscheidet euch von euren Mitbewerbern? Was ist euer USP?"\n`;
+  p += `□ auftragswert — ACHTUNG: Wenn im Gespraech bereits ueber Preise, Pakete oder Monatsbetraege gesprochen wurde, frage NICHT nochmal separat nach dem Auftragswert. Fasse stattdessen zusammen: "Du hast vorhin erwaehnt dass eure Pakete bei X starten — das notiere ich als typischen Auftragswert. Passt das?" Nur wenn KEINE Preisinformation vorliegt, frage: "Was ist ein typischer Auftragswert bei euch?"\n`;
+  p += `□ ausbauen — "Gibt es Bereiche die ihr ausbauen oder veraendern moechtet?"\n`;
+  p += `□ nicht_mehr — "Gibt es Dienstleistungen oder Produkte die ihr bewusst NICHT mehr anbieten wollt?"\n\n`;
+  
+  p += `═══ KRITISCHE REGEL: KEIN VORZEITIGER ABSCHLUSS ═══\n`;
+  p += `Du darfst das Gespraech NIEMALS abschliessen oder zusammenfassen, solange noch Felder offen sind.\n`;
+  p += `Bevor du die Zusammenfassung machst, pruefe intern: Sind ALLE 8 Felder beantwortet?\n`;
+  p += `Wenn NEIN → stelle die fehlende Frage. Sage z.B. "Etwas habe ich noch vergessen zu fragen..."\n`;
+  p += `Wenn ein Feld wirklich nicht zutrifft (z.B. "nicht_mehr"), akzeptiere "Nein, gibt es nicht" als gueltige Antwort.\n\n`;
+  
+  p += `═══ ABLAUF ═══\n`;
+  p += `1. Starte mit einer kurzen Begruessing, dann gib 2-3 kurze Hinweise BEVOR du die erste Frage stellst:\n`;
+  p += `   Sage sinngemäss: \"Bevor wir starten, kurz drei Tipps: Erstens, du kannst mich jederzeit mit 'Stopp' oder 'Moment' unterbrechen wenn etwas nicht stimmt. Zweitens, am Ende kannst du waehlen ob du die Zusammenfassung selber lesen oder von mir hoeren willst. Und drittens, im Angebots-Steckbrief rechts kannst du direkt auf ein Feld klicken um es zu korrigieren. So, jetzt los —\"\n`;
+  p += `   Dann stelle die erste Frage (hauptangebot). Die Hinweise muessen KURZ sein — max 3 Saetze.\n`;
+  p += `2. Arbeite die Felder der Reihe nach ab. Natuerlich — nicht wie eine Checkliste vorlesen.\n`;
+  p += `3. Wenn der Kunde bei einer Antwort mehrere Felder abdeckt, hake das intern ab.\n`;
+  p += `4. Erst wenn ALLE 8 Felder gefuellt: Zusammenfassung machen.\n\n`;
+  
+  p += `═══ ZUSAMMENFASSUNG + LESE-MODUS (nur wenn alle 8 Felder gefuellt) ═══\n`;
+  p += `Wenn alle Felder gefuellt sind, frage den Kunden ZUERST:\n`;
+  p += `\"Ich habe jetzt alles notiert. Moechtest du die Zusammenfassung selber im Angebots-Steckbrief lesen, oder soll ich sie dir vorlesen?\"\n\n`;
+  
+  p += `OPTION A — LESE-MODUS (Kunde will selber lesen):\n`;
+  p += `Sage: \"Gut, schau dir den Angebots-Steckbrief an. Wenn etwas nicht stimmt, klick direkt auf das Feld und wir besprechen es. Ich warte still.\"\n`;
+  p += `Dann WARTE STILL. Sage NICHTS MEHR bis der Kunde sich meldet.\n`;
+  p += `Wenn der Kunde sagt \"alles gut\" oder \"stimmt\": \"Super, dann kannst du den Stopp-Knopf druecken.\"\n`;
+  p += `Wenn der Kunde eine Korrektur macht: Bestaetige kurz, korrigiere, dann wieder still warten.\n\n`;
+  
+  p += `OPTION B — VORLESEN (Kunde will es hoeren):\n`;
+  p += `Fasse ALLE Felder auf, so:\n`;
+  p += `- Angebot 1: [Erstes Angebot]\n`;
+  p += `- Angebot 2: [Zweites Angebot]\n`;
+  p += `- Angebot 3: [Drittes Angebot, falls vorhanden]\n`;
+  p += `- Staerkstes Standbein: [Antwort]\n`;
+  p += `- Zielmarkt: [Antwort]\n`;
+  p += `- Preissegment: [Antwort]\n`;
+  p += `- USP: [Antwort]\n`;
+  p += `- Auftragswert/Pakete: [Antwort]\n`;
+  p += `- Ausbauen/Veraendern: [Antwort]\n`;
+  p += `- Nicht mehr anbieten: [Antwort]\n`;
+  p += `Stimmt das so?\n\n`;
+  
+  p += `Nach Bestaetigung: \"Super, damit haben wir alles. Du kannst jetzt den Stopp-Knopf druecken.\"\n`;
+  p += `DANACH: Sage NICHTS MEHR. Warte still. Der Kunde drueckt den Knopf.\n`;
+  p += `Wenn der Kunde noch eine Frage stellt, antworte kurz. Aber schwafle NICHT.\n\n`;
+  
+  p += `═══ KORREKTUR ═══\n`;
+  p += `Wenn eine Nachricht mit [KORREKTUR-TRIGGER] beginnt, frage direkt: "Was stimmt hier nicht?" Korrigiere und mach weiter.\n`;
+  
+  // ─── Research-Kontext injizieren ───
+  const rc = state._researchContext;
+  if (rc) {
+    p += `\n═══ VORWISSEN AUS RECHERCHE ═══\n`;
+    p += `Du hast bereits folgende Informationen ueber diese Firma. Nutze sie!\n`;
+    p += `Statt Fragen von Null zu stellen, VALIDIERE was du weisst und VERTIEFE.\n\n`;
+    if (rc.firma) p += `Firma: ${rc.firma}\n`;
+    if (rc.branche) p += `Branche: ${rc.branche}\n`;
+    if (rc.region) p += `Region: ${rc.region}\n`;
+    if (rc.website) p += `Website: ${rc.website}\n`;
+    if (rc.firmengroesse) p += `Groesse: ${rc.firmengroesse}\n`;
+    
+    const wa = rc.website_analysis;
+    if (wa) {
+      if (wa.dienstleistungen && wa.dienstleistungen.length > 0) {
+        p += `\nBekannte Dienstleistungen (von Website):\n`;
+        wa.dienstleistungen.forEach(d => { p += `- ${d}\n`; });
+      }
+      if (wa.usp_keywords && wa.usp_keywords.length > 0) {
+        p += `\nBekannte USPs:\n`;
+        wa.usp_keywords.forEach(u => { p += `- ${u}\n`; });
+      }
+      if (wa.marktpositionierung) p += `\nMarktpositionierung: ${wa.marktpositionierung}\n`;
+      if (wa.zusammenfassung) p += `\nZusammenfassung: ${wa.zusammenfassung}\n`;
+    }
+    
+    p += `\n═══ GESPRAECHSSTRATEGIE MIT VORWISSEN ═══\n`;
+    p += `1. Begruesse den Kunden und zeige dass du dich vorbereitet hast.\n`;
+    p += `   Beispiel: "Ich habe mir eure Website angeschaut. Ihr macht [Dienstleistung]. Stimmt das noch so?"\n`;
+    p += `2. Fuer Felder wo du Vorwissen hast: VALIDIERE. "Auf eurer Website steht X — ist das aktuell?"\n`;
+    p += `3. Fuer Felder wo du KEIN Vorwissen hast: Frage normal.\n`;
+    p += `4. Gehe tiefer als die Website: "Das steht so auf der Website. Aber was ist wirklich euer staerkstes Standbein?"\n`;
+  }
+  
+  // ─── Bestehende Offering-Daten injizieren ───
+  const existingData = state.dnaData;
+  const filledFields = Object.keys(existingData).filter(k => existingData[k] && existingData[k] !== '?' && k !== '_updated');
+  if (filledFields.length > 0) {
+    p += `\n═══ BEREITS ERFASSTE DATEN (aus vorheriger Session) ═══\n`;
+    p += `Diese Felder wurden bereits beantwortet. Pruefe kurz ob sie noch stimmen:\n`;
+    filledFields.forEach(k => {
+      p += `✅ ${DNA_LABELS[k] || k}: ${existingData[k]}\n`;
+    });
+    const openFields = Object.keys(DNA_FIELDS).filter(k => !filledFields.includes(k));
+    if (openFields.length > 0) {
+      p += `\nNoch OFFEN (diese musst du abfragen):\n`;
+      openFields.forEach(k => { p += `□ ${DNA_LABELS[k] || k}\n`; });
+    }
+  }
+  
+  return p;
+}
+
+// ═══ MIC TOGGLE ═══
+function toggleMic() {
+  state.isRecording = !state.isRecording;
+  const btn = document.getElementById('micBtn');
+  btn.classList.toggle('active', state.isRecording);
+  btn.title = state.isRecording ? '🟢 Mikrofon aktiv' : '🔴 Mikrofon aus';
+  btn.textContent = state.isRecording ? '🔴' : '🎙️';
+  document.getElementById('micStatus').textContent = state.isRecording ? '🟢 Mikrofon aktiv' : '🔇 Mikrofon aus';
+  document.getElementById('micStatus').style.color = state.isRecording ? 'var(--green)' : 'var(--text-muted)';
+  if (state.adapter && state.adapter.setMicEnabled) {
+    state.adapter.setMicEnabled(state.isRecording);
+  }
+}
+
+// ═══ START INTERVIEW ═══
+window.startInterview = async function() {
+  if (!state.clientId) return;
+  addMessage('system', 'Interview wird gestartet... (LiveKit/Claude | ' + 
+    (state.interactionMode === 'voice' ? '🔊 Voice' : state.interactionMode === 'read' ? '📖 Lesen' : '⌨️ Hybrid') + ')');
+  
+  // ─── SAFETY: Kill any existing session first ───
+  if (state.adapter && state.adapter.disconnect) {
+    console.log('[Firmen-DNA-V2] ⚠️ Killing existing adapter before new session');
+    state.adapter.disconnect();
+    state.adapter = null;
+  }
+  
+  try {
+    // Generate token via agent container
+    addMessage('system', '🔑 Token wird generiert...');
+    const token = await getToken();
+    state._cachedToken = token; // For potential extraction use
+    
+    const adapter = new window.LiveKitAdapter({
+      serverUrl: LK_SERVER_URL,
+      onMessage: (role, content, data) => handleAdapterMessage(role, content, data),
+      onStatusChange: (status) => {
+        if (status === 'connected') {
+          state.isConnected = true;
+          state.startTime = Date.now();
+          document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Aktiv';
+          document.getElementById('micStatus').textContent = '🟢 Mikrofon verbunden';
+          document.getElementById('micStatus').style.color = 'var(--green)';
+          document.getElementById('micBtn').disabled = false;
+          document.getElementById('startBtn').style.display = 'none';
+          document.getElementById('stopBtn').style.display = '';
+          document.getElementById('textInput').disabled = false;
+          document.getElementById('textSendBtn').disabled = false;
+          document.getElementById('saveBtn').style.display = '';
+          startTimer();
+          addMessage('system', '✅ Verbunden mit LiveKit (Self-Hosted)');
+        } else if (status === 'disconnected') {
+          state.isConnected = false;
+          document.getElementById('statusText').innerHTML = '<span class="status-dot"></span> Getrennt';
+        }
+      },
+      onError: (err) => { addMessage('system', '⚠️ Fehler: ' + err); }
+    });
+    
+    state.adapter = adapter;
+    // System prompt is embedded in the Pipecat agent on the VM
+    // The agent uses prompts/interview.txt — no client-side prompt needed
+    await adapter.connect(token, LK_ROOM);
+    
+    // Create session in Supabase
+    state.sessionId = crypto.randomUUID();
+    try {
+      await fetch(`${SB_URL}/rest/v1/interview_sessions`, {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: state.sessionId, client_id: state.clientId, module_id: '371af773-ab50-4d29-b70e-3b34dd9d7278', status: 'active', engine: 'livekit' })
+      });
+    } catch(e) { console.warn('[Session] Create failed:', e); }
+    
+    // Auto-Mic nach 3s Bot-Greeting
+    setTimeout(() => {
+      if (state.adapter && !state.isRecording) {
+        toggleMic();
+        console.log('[Firmen-DNA-V2] 🎤 Mic auto-enabled after bot greeting');
+      }
+    }, 3000);
+  } catch(e) {
+    addMessage('system', `⚠️ Verbindungsfehler: ${e.message}. Demo-Modus aktiv.`);
+    state.isConnected = true;
+    state.startTime = Date.now();
+    document.getElementById('statusText').innerHTML = '<span class="status-dot active"></span> Demo';
+    document.getElementById('micStatus').textContent = '📝 Text-Modus (Demo)';
+    document.getElementById('micStatus').style.color = 'var(--yellow)';
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = '';
+    document.getElementById('textInput').disabled = false;
+    document.getElementById('textSendBtn').disabled = false;
+    startTimer();
+    
+    const greeting = 'Hallo! Hier ist Eusebia. Schön, dass du dir die Zeit nimmst. Wir erarbeiten heute dein Produkte-Portfolio — also was ihr anbietet, womit ihr Geld verdient und wohin die Reise gehen soll. Bereit?';
+    setTimeout(() => addMessage('assistant', greeting), 500);
+  }
+};
+
+window.stopInterview = async function() {
+  // FREEZE extraction — no more ghost-updates after stop
+  state._extractionFrozen = true;
+  logActivity('interview_stopped', { turns: state._agentTurnCount, msgs: state.messageCount });
+  
+  // Disconnect adapter
+  if (state.adapter && state.adapter.disconnect) state.adapter.disconnect();
+  state.isConnected = false;
+  state.adapter = null;
+  
+  // Stop timer
+  if (state._timerInterval) { clearInterval(state._timerInterval); state._timerInterval = null; }
+  
+  // Reset mic
+  state.isRecording = false;
+  const micBtn = document.getElementById('micBtn');
+  micBtn.disabled = true;
+  micBtn.classList.remove('active');
+  micBtn.textContent = '🎙️';
+  document.getElementById('micStatus').textContent = '⏹ Beendet';
+  document.getElementById('micStatus').style.color = 'var(--text-muted)';
+  
+  // UI update
+  document.getElementById('statusText').innerHTML = '<span class="status-dot"></span> Gestoppt';
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('textInput').disabled = true;
+  document.getElementById('textSendBtn').disabled = true;
+  addMessage('system', '⏹ Interview beendet.');
+  
+  // Finale Extraktion vor dem Speichern — temporarily unfreeze for final run
+  state._extractionFrozen = false;
+  addMessage('system', '🔄 Finale Daten-Extraktion...');
+  await maybeUpdateDnaCard();
+  state._extractionFrozen = true; // re-freeze after final extraction
+  
+  // Save to Supabase (offering_structure)
+  const filledKeys = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?' && k !== '_updated');
+  if (filledKeys.length > 0 && state.clientId) {
+    addMessage('system', `💾 Speichere Firmen-DNA (${filledKeys.length}/${DNA_FIELD_COUNT} Felder)...`);
+    const ok = await saveDnaToSupabase();
+    if (ok) {
+      addMessage('system', '✅ Firmen-DNA erfolgreich in Supabase gespeichert!');
+    } else {
+      addMessage('system', '⚠️ Speichern fehlgeschlagen — JSON in Konsole gesichert.');
+    }
+  }
+  // Also save transcript
+  await saveTranscript();
+  console.log('[Firmen-DNA] Final:', JSON.stringify(state.dnaData, null, 2));
+};
+
+async function saveDnaToSupabase() {
+  if (!state.clientId) { console.error('[Save] No clientId'); return false; }
+  try {
+    // First: get current voice_config
+    const getR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}&select=voice_config`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    const rows = await getR.json();
+    const currentConfig = (rows[0] && rows[0].voice_config) || {};
+    
+    // Merge offering_structure into voice_config
+    const updated = { ...currentConfig, offering_structure: { ...state.dnaData, _updated: new Date().toISOString() } };
+    
+    // PATCH
+    const patchR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ voice_config: updated })
+    });
+    if (patchR.ok) {
+      console.log('[Save] ✅ Firmen-DNA gespeichert in voice_config.offering_structure');
+      return true;
+    } else {
+      console.error('[Save] ❌ PATCH failed:', patchR.status, await patchR.text());
+      return false;
+    }
+  } catch(e) { console.error('[Save] ❌ Error:', e); return false; }
+}
+
+function startTimer() {
+  if (state._timerInterval) clearInterval(state._timerInterval);
+  state._timerInterval = setInterval(() => {
+    if (!state.startTime) return;
+    const s = Math.floor((Date.now() - state.startTime) / 1000);
+    document.getElementById('duration').textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  }, 1000);
+}
+
+// ═══ POP-OUT STECKBRIEF (Live-Update) ═══
+let _popOutWindow = null;
+
+function popOutSteckbrief() {
+  _popOutWindow = window.open('', 'steckbrief', 'width=500,height=700,scrollbars=yes');
+  if (!_popOutWindow) { alert('Pop-up blockiert! Bitte erlauben.'); return; }
+  refreshPopOut();
+}
+
+function refreshPopOut() {
+  const w = _popOutWindow;
+  if (!w || w.closed) { _popOutWindow = null; return; }
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Angebots-Steckbrief</title>
+<style>body{font-family:'Inter',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:24px;margin:0;}
+h1{font-size:20px;margin-bottom:16px;color:#60a5fa;display:flex;align-items:center;gap:8px;}
+h1 .live{font-size:10px;background:#22c55e;color:#000;padding:2px 8px;border-radius:10px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+h2{font-size:13px;color:#93c5fd;text-transform:uppercase;margin:16px 0 8px;letter-spacing:0.5px;}
+.field{padding:8px 12px;margin:4px 0;border-left:3px solid #333;font-size:13px;line-height:1.5;border-radius:0 6px 6px 0;background:rgba(255,255,255,0.03);transition:all 0.3s;cursor:pointer;}
+.field:hover{background:rgba(96,165,250,0.08);border-left-color:#60a5fa;}
+.field.filled{border-left-color:#22c55e;background:rgba(34,197,94,0.05);}
+.field.filled:hover{background:rgba(34,197,94,0.12);}
+.field .label{color:#93c5fd;font-weight:600;font-size:12px;}
+.field .value{color:#e0e0e0;margin-top:2px;}
+.field .hint{font-size:10px;color:#555;margin-top:2px;font-style:italic;display:none;}
+.field:hover .hint{display:block;}
+.status-bar{text-align:center;margin-top:16px;font-size:13px;color:#888;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;transition:all 0.3s ease;font-weight:500;}
+.status-bar.working{color:#eab308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);animation:statusPulse 1.5s infinite;}
+.status-bar.error{color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);}
+.status-bar.idle{color:#888;border:1px solid transparent;}
+@keyframes statusPulse{0%,100%{opacity:1;}50%{opacity:0.6;}}
+footer{margin-top:24px;text-align:center;font-size:11px;color:#555;}
+</style></head><body>`;
+  html += `<h1>🏢 Angebots-Steckbrief <span class="live">● LIVE</span></h1>`;
+  const groups = [
+    { title: 'A. Kerngeschäft', keys: ['hauptangebot_1', 'hauptangebot_2', 'hauptangebot_3', 'umsatzstaerkstes', 'zielmarkt'] },
+    { title: 'B. Positionierung', keys: ['preissegment', 'usp', 'auftragswert'] },
+    { title: 'C. Strategie', keys: ['ausbauen', 'nicht_mehr'] }
+  ];
+  let filled = 0;
+  for (const g of groups) {
+    html += `<h2>${g.title}</h2>`;
+    for (const key of g.keys) {
+      const val = state.dnaData[key];
+      const label = DNA_LABELS[key] || key;
+      const hasFill = val && val !== '?';
+      if (hasFill) filled++;
+      html += `<div class="field ${hasFill ? 'filled' : ''}" onclick="window.opener && window.opener.correctField('${key}')">`;
+      html += `<div class="label">${label}</div>`;
+      html += `<div class="value">${hasFill ? val : '<span style="color:#555">— noch offen —</span>'}</div>`;
+      html += `<div class="hint">🖱️ Klicken zum Korrigieren</div>`;
+      html += `</div>`;
+    }
+  }
+  html += `<div id="extractionStatus" class="status-bar idle">✅ ${filled} / ${DNA_FIELD_COUNT} Felder gefüllt — aktualisiert ${new Date().toLocaleTimeString('de-CH')}</div>`;
+  html += `<div style="margin-top:12px;padding:8px 12px;background:rgba(96,165,250,0.06);border-radius:6px;font-size:10px;color:#6b7280;line-height:1.5;">
+ℹ️ <strong>Hinweis:</strong> Der Agent formuliert beim Sprechen teils anders als hier im Steckbrief. Der Steckbrief wird durch eine separate KI-Extraktion erstellt.
+<br>🖱️ Klicke auf ein Feld um eine Korrektur zu starten.</div>`;
+  html += `<footer>ACP Produkte &amp; Positionierung V3.0 — LiveKit</footer>`;
+  html += `</body></html>`;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+// ═══ TRANSCRIPT SAVE + SESSION MANAGEMENT (V2.0) ═══
+function generateIterationLabel() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const quarter = 'Q' + Math.ceil((now.getMonth() + 1) / 3);
+  const hasHistory = document.querySelectorAll('#sessionsList div[data-sid]').length > 0;
+  return `${year}-${quarter} ${hasHistory ? 'Update' : 'Initial'}`;
+}
+
+async function saveTranscript() {
+  if (!state.sessionId) { addMessage('system', '❌ Keine aktive Session.'); return; }
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+  
+  const msgs = [];
+  document.querySelectorAll('#chatMessages .msg').forEach(el => {
+    const roleLabel = el.querySelector('.role-label')?.textContent || '';
+    let role = 'system';
+    if (roleLabel.includes('Eusebia')) role = 'assistant';
+    if (roleLabel.includes('Du')) role = 'user';
+    const text = el.textContent.replace(roleLabel, '').trim();
+    // Use REAL timestamp stored in data attribute (not save-time)
+    const ts = el.dataset.timestamp || new Date().toISOString();
+    if (text) msgs.push({ role, content: text, timestamp: ts });
+  });
+  
+  const payload = {
+    transcript: msgs,
+    persona_data: [state.dnaData],
+    iteration_label: state._iterationLabel || generateIterationLabel(),
+    status: 'completed',
+    updated_at: new Date().toISOString()
+  };
+  
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/interview_sessions?id=eq.${state.sessionId}`, {
+      method: 'PATCH',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) {
+      const filledCount = Object.keys(state.dnaData).filter(k => state.dnaData[k] && state.dnaData[k] !== '?' && k !== '_updated').length;
+      addMessage('system', `✅ Gespeichert: ${msgs.length} Nachrichten, ${filledCount}/8 Felder`);
+      state._dnaSaved = true;
+      const ss = document.getElementById('dnaSaveStatus');
+      if (ss) { ss.textContent = '✅ In Supabase gespeichert'; ss.style.color = 'var(--green)'; }
+      if (saveBtn) { saveBtn.textContent = '✅ Gespeichert'; saveBtn.style.background = 'rgba(34,197,94,0.25)'; }
+      setTimeout(() => { if (saveBtn) { saveBtn.textContent = '💾 Speichern'; saveBtn.style.background = ''; saveBtn.disabled = false; } }, 5000);
+    } else {
+      addMessage('system', `⚠️ Speichern fehlgeschlagen: HTTP ${r.status}`);
+      if (saveBtn) { saveBtn.textContent = '❌ Fehler'; setTimeout(() => { saveBtn.textContent = '💾 Speichern'; saveBtn.disabled = false; }, 3000); }
+    }
+  } catch(e) {
+    addMessage('system', `❌ Fehler: ${e.message}`);
+    if (saveBtn) { saveBtn.textContent = '💾 Speichern'; saveBtn.disabled = false; }
+  }
+}
+
+async function loadSessions(clientId) {
+  const el = document.getElementById('sessionsList');
+  if (!el) return;
+  try {
+    const sessions = await sbFetch('interview_sessions', `?client_id=eq.${clientId}&module_id=eq.371af773-ab50-4d29-b70e-3b34dd9d7278&select=id,created_at,status,iteration_label&order=created_at.desc&limit=5`);
+    if (!sessions.length) { el.innerHTML = '<span style="color:var(--text-muted);">Keine Sessions</span>'; return; }
+    el.innerHTML = sessions.map(s => {
+      const date = new Date(s.created_at).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+      const label = s.iteration_label || '';
+      const statusIcon = s.status === 'completed' ? '✅' : s.status === 'active' ? '🟢' : '⏸️';
+      return `<div data-sid="${s.id}" style="padding:4px 0;cursor:pointer;border-bottom:1px solid var(--border);" onclick="resumeSession('${s.id}')">${statusIcon} ${date} ${label}</div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<span style="color:var(--red);">Fehler</span>'; }
+}
+
+async function resumeSession(sessionId) {
+  addMessage('system', `Session ${sessionId.substring(0,8)}... wird geladen...`);
+  try {
+    const sessions = await sbFetch('interview_sessions', `?id=eq.${sessionId}&select=id,transcript,client_id,persona_data,iteration_label`);
+    if (!sessions.length) { addMessage('system', '❌ Session nicht gefunden.'); return; }
+    const session = sessions[0];
+    state.sessionId = sessionId;
+    
+    // Restore DNA data
+    if (session.persona_data && session.persona_data.length > 0 && Object.keys(session.persona_data[0]).length > 0) {
+      renderDnaCard(session.persona_data[0], 'existing');
+      addMessage('system', `🏢 DNA-Steckbrief wiederhergestellt.`);
+      state._dnaSaved = true;
+      const ss = document.getElementById('dnaSaveStatus');
+      if (ss) { ss.textContent = '✅ In Supabase gespeichert'; ss.style.color = 'var(--green)'; }
+    }
+    if (session.iteration_label) state._iterationLabel = session.iteration_label;
+    
+    // Replay transcript
+    if (session.transcript && session.transcript.length > 0) {
+      session.transcript.forEach(msg => { if (msg.role !== 'system') addMessage(msg.role, msg.content); });
+      addMessage('system', `📜 ${session.transcript.length} Nachrichten geladen.`);
+    }
+    
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startBtn').textContent = '▶ Fortsetzen';
+  } catch(e) { addMessage('system', `❌ Laden fehlgeschlagen: ${e.message}`); }
+}
+</script>
+</body>
+</html>
