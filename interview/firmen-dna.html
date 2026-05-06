@@ -146,6 +146,12 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
     <div class="sidebar-section">
       <div class="sidebar-title">📜 Letzte Sessions</div>
       <div id="sessionsList" style="font-size:11px;color:var(--text-muted);">Wird geladen...</div>
+      <!-- TEST-ADMIN PANEL -->
+      <div id="adminPanel" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:none;">
+        <div style="font-size:10px;color:var(--yellow);margin-bottom:6px;">🔧 Test-Admin</div>
+        <button onclick="deleteAllSessions()" style="width:100%;padding:4px 8px;font-size:10px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:4px;cursor:pointer;margin-bottom:4px;">🗑️ Alle Sessions löschen</button>
+        <button onclick="resetOfferingStructure()" style="width:100%;padding:4px 8px;font-size:10px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:4px;cursor:pointer;">🔄 DNA-Steckbrief zurücksetzen</button>
+      </div>
     </div>
   </div>
 
@@ -1084,15 +1090,91 @@ async function loadSessions(clientId) {
   const el = document.getElementById('sessionsList');
   if (!el) return;
   try {
-    const sessions = await sbFetch('interview_sessions', `?client_id=eq.${clientId}&module_id=eq.371af773-ab50-4d29-b70e-3b34dd9d7278&select=id,created_at,status,iteration_label&order=created_at.desc&limit=5`);
+    const sessions = await sbFetch('interview_sessions', `?client_id=eq.${clientId}&module_id=eq.371af773-ab50-4d29-b70e-3b34dd9d7278&select=id,created_at,status,iteration_label&order=created_at.desc&limit=10`);
+    // Show admin panel when sessions exist or clientId is set
+    const adminPanel = document.getElementById('adminPanel');
+    if (adminPanel) adminPanel.style.display = 'block';
+    
     if (!sessions.length) { el.innerHTML = '<span style="color:var(--text-muted);">Keine Sessions</span>'; return; }
     el.innerHTML = sessions.map(s => {
-      const date = new Date(s.created_at).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+      const date = new Date(s.created_at).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const label = s.iteration_label || '';
       const statusIcon = s.status === 'completed' ? '✅' : s.status === 'active' ? '🟢' : '⏸️';
-      return `<div data-sid="${s.id}" style="padding:4px 0;cursor:pointer;border-bottom:1px solid var(--border);" onclick="resumeSession('${s.id}')">${statusIcon} ${date} ${label}</div>`;
+      return `<div data-sid="${s.id}" style="padding:4px 0;display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--border);">`
+        + `<span style="flex:1;cursor:pointer;" onclick="resumeSession('${s.id}')">${statusIcon} ${date} ${label}</span>`
+        + `<button onclick="event.stopPropagation();deleteSession('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:2px;" title="Session löschen">🗑️</button>`
+        + `</div>`;
     }).join('');
   } catch(e) { el.innerHTML = '<span style="color:var(--red);">Fehler</span>'; }
+}
+
+async function deleteSession(sessionId) {
+  if (!confirm('Session ' + sessionId.substring(0,8) + '... wirklich löschen?')) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/interview_sessions?id=eq.${sessionId}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    if (r.ok) {
+      addMessage('system', `🗑️ Session ${sessionId.substring(0,8)}... gelöscht.`);
+      // Remove from DOM
+      const el = document.querySelector(`[data-sid="${sessionId}"]`);
+      if (el) el.remove();
+      // If we deleted our current session, clear it
+      if (state.sessionId === sessionId) state.sessionId = null;
+      // Reload list
+      if (state.clientId) loadSessions(state.clientId);
+    } else {
+      addMessage('system', `❌ Löschen fehlgeschlagen: HTTP ${r.status}`);
+    }
+  } catch(e) { addMessage('system', `❌ Fehler: ${e.message}`); }
+}
+
+async function deleteAllSessions() {
+  if (!state.clientId) return;
+  if (!confirm('ALLE Sessions für diesen Client löschen? (Nicht rückgängig!)')) return;
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/interview_sessions?client_id=eq.${state.clientId}&module_id=eq.371af773-ab50-4d29-b70e-3b34dd9d7278`, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    if (r.ok) {
+      addMessage('system', '🗑️ Alle Sessions gelöscht.');
+      state.sessionId = null;
+      document.getElementById('sessionsList').innerHTML = '<span style="color:var(--text-muted);">Keine Sessions</span>';
+    } else {
+      addMessage('system', `❌ Löschen fehlgeschlagen: HTTP ${r.status}`);
+    }
+  } catch(e) { addMessage('system', `❌ Fehler: ${e.message}`); }
+}
+
+async function resetOfferingStructure() {
+  if (!state.clientId) return;
+  if (!confirm('DNA-Steckbrief (offering_structure) in Supabase löschen? Das Interview startet dann ohne Vorwissen.')) return;
+  try {
+    // Get current voice_config, remove offering_structure
+    const getR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}&select=voice_config`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    const rows = await getR.json();
+    const currentConfig = (rows[0] && rows[0].voice_config) || {};
+    delete currentConfig.offering_structure;
+    
+    const patchR = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${state.clientId}`, {
+      method: 'PATCH',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ voice_config: currentConfig })
+    });
+    if (patchR.ok) {
+      addMessage('system', '🔄 DNA-Steckbrief zurückgesetzt. Nächstes Interview startet ohne Vorwissen.');
+      // Reset local state
+      state.dnaData = {};
+      state._dnaSaved = false;
+      renderDnaCard({}, 'reset');
+    } else {
+      addMessage('system', `❌ Reset fehlgeschlagen: HTTP ${patchR.status}`);
+    }
+  } catch(e) { addMessage('system', `❌ Fehler: ${e.message}`); }
 }
 
 async function resumeSession(sessionId) {
