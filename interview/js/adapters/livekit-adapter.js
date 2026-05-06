@@ -100,6 +100,24 @@ class LiveKitAdapter {
     }
   }
 
+  /**
+   * Sends a JSON data message to all participants (including the agent)
+   * via LiveKit's reliable data channel.
+   */
+  async sendData(payload) {
+    if (!this.room || !this._connected) {
+      console.warn('[LiveKit] sendData: not connected');
+      return;
+    }
+    try {
+      const data = new TextEncoder().encode(JSON.stringify(payload));
+      await this.room.localParticipant.publishData(data, { reliable: true });
+      console.log('[LiveKit] 📤 Data sent:', payload.type || 'unknown');
+    } catch (e) {
+      console.error('[LiveKit] sendData failed:', e);
+    }
+  }
+
   async disconnect() {
     this._stopAudioAnalysis();
     if (this.room) { await this.room.disconnect(); this.room = null; }

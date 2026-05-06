@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ACP Produkte & Positionierung (V2 — LiveKit)</title>
+<title>ACP Produkte & Positionierung (V3.3 — LiveKit)</title>
 <meta name="description" content="Voice-Agent zur Erarbeitung der Produkte und Positionierung">
 <meta name="robots" content="noindex, nofollow">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -816,6 +816,18 @@ window.startInterview = async function() {
         body: JSON.stringify({ id: state.sessionId, client_id: state.clientId, module_id: '371af773-ab50-4d29-b70e-3b34dd9d7278', status: 'active', engine: 'livekit' })
       });
     } catch(e) { console.warn('[Session] Create failed:', e); }
+    
+    // Send session_init to agent via data channel — enables backend persistence
+    setTimeout(async () => {
+      if (state.adapter && state.adapter.sendData) {
+        await state.adapter.sendData({
+          type: 'session_init',
+          session_id: state.sessionId,
+          client_id: state.clientId,
+        });
+        console.log('[Firmen-DNA-V2] 📋 session_init gesendet:', state.sessionId.substring(0,8) + '...');
+      }
+    }, 1500); // Warten bis Agent vollständig verbunden ist
     
     // Auto-Mic nach 3s Bot-Greeting
     setTimeout(() => {
