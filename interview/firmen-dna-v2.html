@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V3.0 — LiveKit Self-Hosted + Claude Sonnet</span>
+  <span class="version">V3.1 — LiveKit Self-Hosted + Claude Sonnet</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -431,14 +431,16 @@ function handleAdapterMessage(role, content) {
   if (role === 'assistant') {
     state._lastUserMsg = null;
     state._agentTurnCount++;
-    // Safety: Strip any [DNA:...] tags the server didn't catch
-    displayContent = content.replace(/\s*\[DNA:[^\]]+\]/g, '').trim();
+    // Safety: Strip any [DNA:...] tags AND fragments the server didn't catch
+    displayContent = content.replace(/\s*\[DNA:[^\]]*\]?/g, '').trim();
+    // Also strip orphaned brackets from tag fragments
+    displayContent = displayContent.replace(/\s*\[[A-Z]+:[^\]]*$/g, '').trim();
     // Post-Processing V2.2
     displayContent = postProcessAgent(displayContent);
     // Update turn counter in sidebar
     document.getElementById('turnCount').textContent = state._agentTurnCount;
     updateTurnProgress();
-    // DNA extraction EVERY turn (was: every 2 turns — too slow)
+    // Client-side regex extraction as FALLBACK (agent DNA updates are authoritative)
     maybeUpdateDnaCard();
   }
   
@@ -517,14 +519,20 @@ function setExtractionStatus(text, type) {
 }
 
 window.correctField = function(fieldKey) {
-  if (!state.isConnected) return;
+  if (!state.isConnected) {
+    addMessage('system', '⚠️ Nicht verbunden — starte erst das Interview.');
+    return;
+  }
   const el = document.getElementById(DNA_FIELDS[fieldKey]);
-  if (!el || !el.classList.contains('filled')) return;
+  if (!el) return;
   const val = state.dnaData[fieldKey] || '';
   const label = DNA_LABELS[fieldKey] || fieldKey;
-  const msg = `[KORREKTUR-TRIGGER] Der User möchte das Feld "${label}" korrigieren. Aktueller Wert: "${val}". Frage: "Was stimmt beim ${label} nicht?"`;
+  // Works for both filled (correction) and unfilled (request fill) fields
+  const action = val ? 'korrigieren' : 'beantworten';
+  const currentVal = val ? ` Aktueller Wert: "${val}".` : '';
+  const msg = `[KORREKTUR-TRIGGER] Der User möchte das Feld "${label}" ${action}.${currentVal} Frage: "Was stimmt beim ${label} nicht?"`;
   if (state.adapter && state.adapter.sendText) state.adapter.sendText(msg);
-  addMessage('system', `✏️ Korrektur: ${label}`);
+  addMessage('system', `✏️ ${val ? 'Korrektur' : 'Nachfrage'}: ${label}`);
   el.style.borderLeftColor = 'var(--yellow)';
   el.style.background = 'rgba(234,179,8,0.1)';
   setTimeout(() => { el.style.borderLeftColor = ''; el.style.background = ''; }, 5000);
