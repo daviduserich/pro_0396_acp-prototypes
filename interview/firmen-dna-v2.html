@@ -425,8 +425,10 @@ function handleAdapterMessage(role, content) {
   if (role === 'assistant') {
     state._lastUserMsg = null;
     state._agentTurnCount++;
+    // Safety: Strip any [DNA:...] tags the server didn't catch
+    displayContent = content.replace(/\s*\[DNA:[^\]]+\]/g, '').trim();
     // Post-Processing V2.2
-    displayContent = postProcessAgent(content);
+    displayContent = postProcessAgent(displayContent);
     // Update turn counter in sidebar
     document.getElementById('turnCount').textContent = state._agentTurnCount;
     updateTurnProgress();
@@ -748,6 +750,10 @@ window.startInterview = async function() {
     const adapter = new window.LiveKitAdapter({
       serverUrl: LK_SERVER_URL,
       onMessage: (role, content, data) => handleAdapterMessage(role, content, data),
+      onDnaUpdate: (fields) => {
+        console.log('[Firmen-DNA-V2] 🧬 Agent DNA Update:', fields);
+        renderDnaCard(fields, 'agent');
+      },
       onStatusChange: (status) => {
         if (status === 'connected') {
           state.isConnected = true;

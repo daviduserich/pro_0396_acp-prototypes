@@ -23,6 +23,7 @@ class LiveKitAdapter {
     this.onStatusChange = opts.onStatusChange || (() => {});
     this.onAudioLevel = opts.onAudioLevel || (() => {});
     this.onTopicChange = opts.onTopicChange || (() => {});
+    this.onDnaUpdate = opts.onDnaUpdate || null;
     this.serverUrl = opts.serverUrl || 'wss://lk.n8n-mxs.com';
     this.room = null;
     this.audioContext = null;
@@ -66,6 +67,9 @@ class LiveKitAdapter {
             this.onMessage(msg.role, msg.content, msg);
           } else if (msg.type === 'topic_change') {
             this.onTopicChange(msg.topic_id, msg.topic_index);
+          } else if (msg.type === 'dna_update') {
+            console.log('[LiveKit] 🧬 DNA Update received:', msg.fields);
+            if (this.onDnaUpdate) this.onDnaUpdate(msg.fields);
           }
         } catch (e) {
           console.warn('[LiveKit] Data message parse error:', e);
