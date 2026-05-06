@@ -87,7 +87,7 @@ html, body { font-family:var(--font); background:var(--bg); color:var(--text); h
 <div class="app-shell">
 <div class="header">
   <h1>🏢 ACP Produkte & Positionierung</h1>
-  <span class="version">V3.1 — LiveKit Self-Hosted + Claude Sonnet</span>
+  <span class="version">V3.2 — LiveKit Self-Hosted + Claude Sonnet</span>
 </div>
 <div class="config-bar">
   <div class="config-group"><label>Kunde</label><select id="clientSelect"><option value="">— wählen —</option></select></div>
@@ -414,11 +414,15 @@ function postProcessAgent(text) {
 }
 
 // ═══ ADAPTER CALLBACKS (with Post-Processing) ═══
-function handleAdapterMessage(role, content) {
+function handleAdapterMessage(role, content, data) {
   showTyping(false);
   let displayContent = content;
-  
   if (role === 'user') {
+    // STT stutter dedup: "b-to-to-to-to..." → "B2B"
+    content = content.replace(/\bb-(?:to-){3,}to\b/gi, 'B2B');
+    content = content.replace(/\bb-(?:to-c-){2,}/gi, 'B2C');
+    displayContent = content;
+    
     const trimmed = content.trim();
     if (!trimmed || trimmed === state._lastUserMsg) return;
     if (state._lastUserMsg && trimmed.startsWith(state._lastUserMsg)) {
@@ -464,6 +468,7 @@ function updateTurnProgress() {
 
 // ═══ DNA CARD ═══
 let _dnaCardVisible = true;
+const _serverDnaFields = new Set(); // Fields set by server DNA — never overwrite these with regex
 
 window.toggleDnaCard = function() {
   _dnaCardVisible = !_dnaCardVisible;
@@ -586,9 +591,13 @@ async function maybeUpdateDnaCard() {
     if (aus) extracted.ausbauen = aus[1].trim();
     const nm = transcript.match(/(?:nicht\s+mehr|aufhören|loswerden|weg\s+von)[\s:]*([^\n.]{5,80})/i);
     if (nm) extracted.nicht_mehr = nm[1].trim();
+    // CRITICAL: Never overwrite fields already set by server DNA updates
+    for (const key of _serverDnaFields) {
+      delete extracted[key];
+    }
     const filled = Object.values(extracted).filter(v => v && v !== '?').length;
-    console.log(`[DNA #${_extractionCount}] ✅ ${filled}/${DNA_FIELD_COUNT} fields`);
-    logActivity('extraction_done', { filled, turn: state._agentTurnCount, method: 'regex' });
+    console.log(`[DNA #${_extractionCount}] ✅ ${filled}/${DNA_FIELD_COUNT} regex fields (${_serverDnaFields.size} server-locked)`);
+    logActivity('extraction_done', { filled, turn: state._agentTurnCount, method: 'regex', serverLocked: _serverDnaFields.size });
     if (filled > 0) renderDnaCard(extracted);
     else setExtractionStatus(`⏳ Noch zu wenig Daten`, 'idle');
   } catch(e) {
@@ -766,6 +775,8 @@ window.startInterview = async function() {
       onMessage: (role, content, data) => handleAdapterMessage(role, content, data),
       onDnaUpdate: (fields) => {
         console.log('[Firmen-DNA-V2] 🧬 Agent DNA Update:', fields);
+        // Mark these fields as server-authoritative — regex must never overwrite
+        Object.keys(fields).forEach(k => _serverDnaFields.add(k));
         renderDnaCard(fields, 'agent');
       },
       onStatusChange: (status) => {
